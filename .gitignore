@@ -1,0 +1,8 @@
+*.egg-info
+__pycache__/
+builddir/
+build/
+dist/
+.idea/
+.ipynb_checkpoints/
+docs/Examples/data/
