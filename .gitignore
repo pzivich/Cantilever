@@ -6,3 +6,4 @@ dist/
 .idea/
 .ipynb_checkpoints/
 docs/Examples/data/
+examples/
