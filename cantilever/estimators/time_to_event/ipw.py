@@ -1,14 +1,12 @@
 import warnings
-from time import time
 import numpy as np
 import pandas as pd
 from delicatessen import MEstimator
 
 from cantilever.estimators.time_to_event.basics import BridgeTimeEstimator
-from cantilever.estimators.time_to_event.efuncs import (ef_risk_product_limit,
-                                                        ef_diagnostic_product_limit,
-                                                        product_limit_predict, construct_weights
-                                                        )
+from cantilever.estimators.time_to_event.efuncs import ef_risk_ipw, ef_diagnostic_ipw
+from cantilever.estimators.time_to_event.utils import product_limit_predict
+# TODO add diagnostic based on construct_weights, will require some efunc retooling
 
 
 class BridgeIPW(BridgeTimeEstimator):
@@ -50,31 +48,27 @@ class BridgeIPW(BridgeTimeEstimator):
                 starting_censor = self._censor_coefs_[0] + self._censor_coefs_[1]
 
             def psi(theta):
-                return ef_risk_product_limit(theta=theta,
-                                             s=s,
-                                             a=a,
-                                             c=c,
-                                             delta=delta,
-                                             sample_matrix=self._sample_design_matrix_,
-                                             action_matrix=self._action_design_matrix_,
-                                             censor_matrix=self._censor_design_matrix_,
-                                             time_matrix_s1=t1_matrix,
-                                             final_time_matrix_s1=f1_matrix,
-                                             risk_set_matrix_s1=r1_matrix,
-                                             strata_s1_times=u1_times,
-                                             time_matrix_s0=t0_matrix,
-                                             final_time_matrix_s0=f0_matrix,
-                                             risk_set_matrix_s0=r0_matrix,
-                                             strata_s0_times=u0_times,
-                                             final_time_matrix=f_matrix,
-                                             risk_set_matrix=r_matrix,
-                                             contribute=(s == samp) & (a == act),
-                                             unique_censor_times=u_c_times,
-                                             unique_event_times=u_times)
+                return ef_risk_ipw(theta=theta, s=s, a=a, c=c, delta=delta,
+                                   sample_matrix=self._sample_design_matrix_,
+                                   action_matrix=self._action_design_matrix_,
+                                   censor_matrix=self._censor_design_matrix_,
+                                   time_matrix_s1=t1_matrix,
+                                   final_time_matrix_s1=f1_matrix,
+                                   risk_set_matrix_s1=r1_matrix,
+                                   strata_s1_times=u1_times,
+                                   time_matrix_s0=t0_matrix,
+                                   final_time_matrix_s0=f0_matrix,
+                                   risk_set_matrix_s0=r0_matrix,
+                                   strata_s0_times=u0_times,
+                                   final_time_matrix=f_matrix,
+                                   risk_set_matrix=r_matrix,
+                                   contribute=(s == samp) & (a == act),
+                                   unique_censor_times=u_c_times,
+                                   unique_event_times=u_times)
 
             # Estimating weighted product limit
             starting_vals = [0.01, ]*n_unique_times + self._sample_coefs_ + self._action_coefs_ + starting_censor
-            estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times+1)))
+            estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
             estr.estimate()
             est = estr.theta
             ci = estr.confidence_intervals()
@@ -111,37 +105,32 @@ class BridgeIPW(BridgeTimeEstimator):
             starting_censor = self._censor_coefs_[0] + self._censor_coefs_[1]
 
         def psi_diagnostic(theta):
-            return ef_diagnostic_product_limit(theta=theta,
-                                               s=s,
-                                               a=a,
-                                               c=c,
-                                               delta=delta,
-                                               sample_matrix=self._sample_design_matrix_,
-                                               action_matrix=self._action_design_matrix_,
-                                               censor_matrix=self._censor_design_matrix_,
-                                               time_matrix_s1=t1_matrix,
-                                               final_time_matrix_s1=f1_matrix,
-                                               risk_set_matrix_s1=r1_matrix,
-                                               strata_s1_times=u1_times,
-                                               time_matrix_s0=t0_matrix,
-                                               final_time_matrix_s0=f0_matrix,
-                                               risk_set_matrix_s0=r0_matrix,
-                                               strata_s0_times=u0_times,
-                                               final_time_matrix=f_matrix,
-                                               risk_set_matrix=r_matrix,
-                                               unique_censor_times=u_c_times,
-                                               unique_event_times=u_times
-                                               )
+            return ef_diagnostic_ipw(theta=theta, s=s, a=a, c=c, delta=delta,
+                                     sample_matrix=self._sample_design_matrix_,
+                                     action_matrix=self._action_design_matrix_,
+                                     censor_matrix=self._censor_design_matrix_,
+                                     time_matrix_s1=t1_matrix,
+                                     final_time_matrix_s1=f1_matrix,
+                                     risk_set_matrix_s1=r1_matrix,
+                                     strata_s1_times=u1_times,
+                                     time_matrix_s0=t0_matrix,
+                                     final_time_matrix_s0=f0_matrix,
+                                     risk_set_matrix_s0=r0_matrix,
+                                     strata_s0_times=u0_times,
+                                     final_time_matrix=f_matrix,
+                                     risk_set_matrix=r_matrix,
+                                     unique_censor_times=u_c_times,
+                                     unique_event_times=u_times)
 
         if self.risks is None:
             starting_vals = ([0., ] + [0., ]*n_unique_times*3
                              + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(0, n_unique_times*3 + 2))
+            subset_solve = list(range(n_unique_times*3 + 1))
         else:
             starting_vals = ([0., ] + [0., ]*n_unique_times
                              + list(self.risks['R-A1S1'])[1:] + list(self.risks['R-A1S0'])[1:]
                              + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(0, n_unique_times + 2))
+            subset_solve = list(range(n_unique_times + 1))
 
         estr = MEstimator(psi_diagnostic, init=starting_vals, subset=subset_solve)
         estr.estimate()
@@ -168,7 +157,19 @@ class BridgeIPW(BridgeTimeEstimator):
         self.diagnostic = results.set_index("Time")
 
     def estimate_single_span(self):
-        pass
+        t, delta, a, s, c = self._get_variable_arrays_()
+        t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
+        n_unique_times = len(u_times)
+        if self._censor_design_matrix_ is None:
+            t1_matrix, f1_matrix, r1_matrix, u1_times = None, None, None, None
+            t0_matrix, f0_matrix, r0_matrix, u0_times = None, None, None, None
+            u_c_times, u_d_times = None, None
+            starting_censor = []
+        else:
+            t1_matrix, f1_matrix, r1_matrix, u1_times = self._get_censor_matrices_(t=t, c=c, sample=1)
+            t0_matrix, f0_matrix, r0_matrix, u0_times = self._get_censor_matrices_(t=t, c=c, sample=0)
+            u_c_times = list(np.unique(self.data.loc[c == 1, self.time]))
+            starting_censor = self._censor_coefs_[0] + self._censor_coefs_[1]
 
     def estimate_multi_span(self):
         pass

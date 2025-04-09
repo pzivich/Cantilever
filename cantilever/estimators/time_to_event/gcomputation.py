@@ -5,9 +5,8 @@ from delicatessen import MEstimator
 
 from cantilever.formulas import get_design_matrix
 from cantilever.estimators.time_to_event.basics import BridgeTimeEstimator
-from cantilever.estimators.time_to_event.efuncs import (ef_pooled_logit, ef_risk_function,
-                                                        ef_diagnostic_function,
-                                                        ef_single_span_function, ef_multi_span_function)
+from cantilever.estimators.time_to_event.efuncs import (ef_risk_gcomp, ef_diagnostic_gcomp,
+                                                        ef_single_span_gcomp, ef_multi_span_gcomp)
 
 
 class BridgeGComputation(BridgeTimeEstimator):
@@ -54,19 +53,19 @@ class BridgeGComputation(BridgeTimeEstimator):
             # TODO add weights
 
             def psi(theta):
-                return ef_risk_function(theta=theta,
-                                        delta=delta,
-                                        baseline_matrix=baseline_matrix,
-                                        time_matrix=t_matrix,
-                                        final_time_matrix=f_matrix,
-                                        risk_set_matrix=r_matrix,
-                                        contribute=(a == act) & (s == samp),
-                                        strata_unique_times=u_times,
-                                        all_unique_times=self.all_unique_times)
+                return ef_risk_gcomp(theta=theta,
+                                     delta=delta,
+                                     baseline_matrix=baseline_matrix,
+                                     time_matrix=t_matrix,
+                                     final_time_matrix=f_matrix,
+                                     risk_set_matrix=r_matrix,
+                                     contribute=(a == act) & (s == samp),
+                                     strata_unique_times=u_times,
+                                     all_unique_times=self.all_unique_times)
 
             # Estimating pooled logistic model
             starting_vals = [0.01, ]*n_unique_times + self._outcome_coefs_[i]
-            estr = MEstimator(psi, init=starting_vals)
+            estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
             estr.estimate()
             est = estr.theta
             ci = estr.confidence_intervals()
@@ -96,25 +95,24 @@ class BridgeGComputation(BridgeTimeEstimator):
         baseline_matrix = np.asarray(matrix)
         t_matrix1, f_matrix1, r_matrix1, u_times1 = self._get_time_matrices_(t=t, action=1, sample=1)
         t_matrix0, f_matrix0, r_matrix0, u_times0 = self._get_time_matrices_(t=t, action=1, sample=0)
-        # TODO add weights
 
         def psi_diagnostic(theta):
-            return ef_diagnostic_function(theta=theta, delta=delta, sample=s,
-                                          baseline_matrix=baseline_matrix,
-                                          time_matrix_s1=t_matrix1,
-                                          final_time_matrix_s1=f_matrix1,
-                                          risk_set_matrix_s1=r_matrix1,
-                                          contribute_s1=(a == 1) * (s == 1),
-                                          strata_s1_times=u_times1,
-                                          time_matrix_s0=t_matrix0,
-                                          final_time_matrix_s0=f_matrix0,
-                                          risk_set_matrix_s0=r_matrix0,
-                                          contribute_s0=(a == 1) * (s == 0),
-                                          strata_s0_times=u_times0,
-                                          all_unique_times=self.all_unique_times)
+            return ef_diagnostic_gcomp(theta=theta, delta=delta, sample=s,
+                                       baseline_matrix=baseline_matrix,
+                                       time_matrix_s1=t_matrix1,
+                                       final_time_matrix_s1=f_matrix1,
+                                       risk_set_matrix_s1=r_matrix1,
+                                       contribute_s1=(a == 1) * (s == 1),
+                                       strata_s1_times=u_times1,
+                                       time_matrix_s0=t_matrix0,
+                                       final_time_matrix_s0=f_matrix0,
+                                       risk_set_matrix_s0=r_matrix0,
+                                       contribute_s0=(a == 1) * (s == 0),
+                                       strata_s0_times=u_times0,
+                                       all_unique_times=self.all_unique_times)
 
         starting_vals = [0., ] + [0., ]*n_unique_times + self._outcome_coefs_[1] + self._outcome_coefs_[2]
-        estr = MEstimator(psi_diagnostic, init=starting_vals)
+        estr = MEstimator(psi_diagnostic, init=starting_vals, subset=list(range(n_unique_times+1)))
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()
@@ -151,22 +149,22 @@ class BridgeGComputation(BridgeTimeEstimator):
         # TODO add weights
 
         def psi_single_span(theta):
-            return ef_single_span_function(theta=theta, delta=delta, sample=s,
-                                           baseline_matrix=baseline_matrix,
-                                           time_matrix_s1=t_matrix1,
-                                           final_time_matrix_s1=f_matrix1,
-                                           risk_set_matrix_s1=r_matrix1,
-                                           contribute_s1=(a == 2) * (s == 1),
-                                           strata_s1_times=u_times1,
-                                           time_matrix_s0=t_matrix0,
-                                           final_time_matrix_s0=f_matrix0,
-                                           risk_set_matrix_s0=r_matrix0,
-                                           contribute_s0=(a == 0) * (s == 0),
-                                           strata_s0_times=u_times0,
-                                           all_unique_times=self.all_unique_times)
+            return ef_single_span_gcomp(theta=theta, delta=delta, sample=s,
+                                        baseline_matrix=baseline_matrix,
+                                        time_matrix_s1=t_matrix1,
+                                        final_time_matrix_s1=f_matrix1,
+                                        risk_set_matrix_s1=r_matrix1,
+                                        contribute_s1=(a == 2) * (s == 1),
+                                        strata_s1_times=u_times1,
+                                        time_matrix_s0=t_matrix0,
+                                        final_time_matrix_s0=f_matrix0,
+                                        risk_set_matrix_s0=r_matrix0,
+                                        contribute_s0=(a == 0) * (s == 0),
+                                        strata_s0_times=u_times0,
+                                        all_unique_times=self.all_unique_times)
 
         start_vals = [0., ] * n_unique_times + self._outcome_coefs_[0] + self._outcome_coefs_[3]
-        estr = MEstimator(psi_single_span, init=start_vals)
+        estr = MEstimator(psi_single_span, init=start_vals, subset=list(range(n_unique_times)))
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()
@@ -200,34 +198,34 @@ class BridgeGComputation(BridgeTimeEstimator):
         # TODO add weights
 
         def psi_multi_span(theta):
-            return ef_multi_span_function(theta=theta, delta=delta, sample=s,
-                                          baseline_matrix=baseline_matrix,
-                                          time_matrix_s3=t_matrix3,
-                                          final_time_matrix_s3=f_matrix3,
-                                          risk_set_matrix_s3=r_matrix3,
-                                          contribute_s3=(a == 2) * (s == 1),
-                                          strata_s3_times=u_times3,
-                                          time_matrix_s2=t_matrix2,
-                                          final_time_matrix_s2=f_matrix2,
-                                          risk_set_matrix_s2=r_matrix2,
-                                          contribute_s2=(a == 1) * (s == 1),
-                                          strata_s2_times=u_times2,
-                                          time_matrix_s1=t_matrix1,
-                                          final_time_matrix_s1=f_matrix1,
-                                          risk_set_matrix_s1=r_matrix1,
-                                          contribute_s1=(a == 1) * (s == 0),
-                                          strata_s1_times=u_times1,
-                                          time_matrix_s0=t_matrix0,
-                                          final_time_matrix_s0=f_matrix0,
-                                          risk_set_matrix_s0=r_matrix0,
-                                          contribute_s0=(a == 0) * (s == 0),
-                                          strata_s0_times=u_times0,
-                                          all_unique_times=self.all_unique_times)
+            return ef_multi_span_gcomp(theta=theta, delta=delta, sample=s,
+                                       baseline_matrix=baseline_matrix,
+                                       time_matrix_s3=t_matrix3,
+                                       final_time_matrix_s3=f_matrix3,
+                                       risk_set_matrix_s3=r_matrix3,
+                                       contribute_s3=(a == 2) * (s == 1),
+                                       strata_s3_times=u_times3,
+                                       time_matrix_s2=t_matrix2,
+                                       final_time_matrix_s2=f_matrix2,
+                                       risk_set_matrix_s2=r_matrix2,
+                                       contribute_s2=(a == 1) * (s == 1),
+                                       strata_s2_times=u_times2,
+                                       time_matrix_s1=t_matrix1,
+                                       final_time_matrix_s1=f_matrix1,
+                                       risk_set_matrix_s1=r_matrix1,
+                                       contribute_s1=(a == 1) * (s == 0),
+                                       strata_s1_times=u_times1,
+                                       time_matrix_s0=t_matrix0,
+                                       final_time_matrix_s0=f_matrix0,
+                                       risk_set_matrix_s0=r_matrix0,
+                                       contribute_s0=(a == 0) * (s == 0),
+                                       strata_s0_times=u_times0,
+                                       all_unique_times=self.all_unique_times)
 
         start_vals = ([0., ] * n_unique_times
                       + self._outcome_coefs_[0] + self._outcome_coefs_[1]
                       + self._outcome_coefs_[2] + self._outcome_coefs_[3])
-        estr = MEstimator(psi_multi_span, init=start_vals)
+        estr = MEstimator(psi_multi_span, init=start_vals, subset=list(range(n_unique_times)))
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()
