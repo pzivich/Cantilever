@@ -2,7 +2,8 @@ import numpy as np
 from delicatessen.estimating_equations import ee_regression
 from delicatessen.utilities import inverse_logit
 
-from cantilever.estimators.time_to_event.utils import construct_weights, plogit_predictions
+from cantilever.estimators.time_to_event.utils import (construct_iosw, construct_weights,
+                                                       horvitz_thompson_predict, plogit_predictions)
 
 
 def ef_sample_logit(theta, s, sample_matrix):
@@ -71,10 +72,19 @@ def ef_product_limit(theta, delta, final_time_matrix, risk_set_matrix, contribut
     return ee_risk * contributions
 
 
+def ef_horvitz_thompson(theta, beta, s, a, delta, sample_matrix, final_time_matrix, contribute, contribute_s, weights):
+    theta = np.asarray(theta)
+    index1 = sample_matrix.shape[1]
+    iosw = construct_iosw(beta[:index1], s=s, sample_matrix=sample_matrix)
+    event_contributions = final_time_matrix * delta * weights * contribute
+    return np.cumsum(event_contributions, axis=0) - theta[:, None]*contribute_s*iosw
+
+
 def ef_risk_ipw(theta, s, a, c, delta, sample_matrix, action_matrix, censor_matrix,
                 time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
                 time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
-                final_time_matrix, risk_set_matrix, contribute, unique_censor_times, unique_event_times):
+                final_time_matrix, risk_set_matrix, contribute, contribute_s, unique_censor_times, unique_event_times,
+                product_limit=True):
     n_unique_times = risk_set_matrix.shape[0]
     alpha = theta[:n_unique_times]
     beta_all = theta[n_unique_times:]
@@ -97,13 +107,18 @@ def ef_risk_ipw(theta, s, a, c, delta, sample_matrix, action_matrix, censor_matr
                             unique_censor_times=unique_censor_times,
                             unique_event_times=unique_event_times)
 
-    # Estimating risk function via product limit
-    ee_risk = ef_product_limit(theta=alpha,
-                               delta=delta,
-                               final_time_matrix=final_time_matrix,
-                               risk_set_matrix=risk_set_matrix,
-                               contributions=contribute,
-                               weights=ipw)
+    # Estimating risk function
+    if product_limit:
+        ee_risk = ef_product_limit(theta=alpha,
+                                   delta=delta,
+                                   final_time_matrix=final_time_matrix,
+                                   risk_set_matrix=risk_set_matrix,
+                                   contributions=contribute, weights=ipw)
+    else:
+        ee_risk = ef_horvitz_thompson(theta=alpha, beta=beta_all, s=s, a=a, delta=delta,
+                                      sample_matrix=sample_matrix,
+                                      final_time_matrix=final_time_matrix,
+                                      contribute=contribute, contribute_s=contribute_s, weights=ipw)
 
     # Returning stacked estimating functions
     return np.vstack([ee_risk, ee_weights])
@@ -113,7 +128,7 @@ def ef_diagnostic_ipw(theta, s, a, c,
                       delta, sample_matrix, action_matrix, censor_matrix,
                       time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
                       time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
-                      final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times):
+                      final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times, product_limit=True):
     n_unique_times = risk_set_matrix.shape[0]
     obs_n = delta.shape[0]
     ird = theta[0]
@@ -141,18 +156,27 @@ def ef_diagnostic_ipw(theta, s, a, c,
                             )
 
     # Estimating risk function via product limit
-    ee_risk1 = ef_product_limit(theta=risk1,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 1) & (a == 1),
-                                weights=ipw)
-    ee_risk0 = ef_product_limit(theta=risk0,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 0) & (a == 1),
-                                weights=ipw)
+    if product_limit:
+        ee_risk1 = ef_product_limit(theta=risk1,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 1) & (a == 1),
+                                    weights=ipw)
+        ee_risk0 = ef_product_limit(theta=risk0,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 0) & (a == 1),
+                                    weights=ipw)
+    else:
+        ee_risk1 = ef_horvitz_thompson(theta=risk1, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 1) & (a == 1), contribute_s=(s == 1),
+                                       weights=ipw)
+        ee_risk0 = ef_horvitz_thompson(theta=risk0, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 0) & (a == 1), contribute_s=(s == 0), weights=ipw)
 
     # Diagnostic risk function estimation
     ee_diag = ((risk1 - risk0) - np.asarray(risk_diagnostic))[:, None] * np.ones(obs_n)
@@ -168,7 +192,7 @@ def ef_single_span_ipw(theta, s, a, c,
                        delta, sample_matrix, action_matrix, censor_matrix,
                        time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
                        time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
-                       final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times):
+                       final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times, product_limit=True):
     n_unique_times = risk_set_matrix.shape[0]
     obs_n = delta.shape[0]
     risk_diff = np.asarray(theta[:n_unique_times])
@@ -194,18 +218,26 @@ def ef_single_span_ipw(theta, s, a, c,
                             unique_event_times=unique_event_times
                             )
     # Estimating risk function via product limit
-    ee_risk1 = ef_product_limit(theta=risk1,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 1) & (a == 2),
-                                weights=ipw)
-    ee_risk0 = ef_product_limit(theta=risk0,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 0) & (a == 0),
-                                weights=ipw)
+    if product_limit:
+        ee_risk1 = ef_product_limit(theta=risk1,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 1) & (a == 2),
+                                    weights=ipw)
+        ee_risk0 = ef_product_limit(theta=risk0,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 0) & (a == 0),
+                                    weights=ipw)
+    else:
+        ee_risk1 = ef_horvitz_thompson(theta=risk1, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 1) & (a == 2), contribute_s=(s == 1), weights=ipw)
+        ee_risk0 = ef_horvitz_thompson(theta=risk0, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 0) & (a == 0), contribute_s=(s == 0), weights=ipw)
 
     # Diagnostic risk function estimation
     ee_ss = ((risk1 - risk0) - np.asarray(risk_diff))[:, None] * np.ones(obs_n)
@@ -217,7 +249,7 @@ def ef_multi_span_ipw(theta, s, a, c,
                       delta, sample_matrix, action_matrix, censor_matrix,
                       time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
                       time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
-                      final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times):
+                      final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times, product_limit=True):
     n_unique_times = risk_set_matrix.shape[0]
     obs_n = delta.shape[0]
     risk_diff = np.asarray(theta[:n_unique_times])
@@ -245,30 +277,44 @@ def ef_multi_span_ipw(theta, s, a, c,
                             unique_event_times=unique_event_times
                             )
     # Estimating risk function via product limit
-    ee_risk3 = ef_product_limit(theta=risk3,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 1) & (a == 2),
-                                weights=ipw)
-    ee_risk2 = ef_product_limit(theta=risk2,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 1) & (a == 1),
-                                weights=ipw)
-    ee_risk1 = ef_product_limit(theta=risk1,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 0) & (a == 1),
-                                weights=ipw)
-    ee_risk0 = ef_product_limit(theta=risk0,
-                                delta=delta,
-                                final_time_matrix=final_time_matrix,
-                                risk_set_matrix=risk_set_matrix,
-                                contributions=(s == 0) & (a == 0),
-                                weights=ipw)
+    if product_limit:
+        ee_risk3 = ef_product_limit(theta=risk3,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 1) & (a == 2),
+                                    weights=ipw)
+        ee_risk2 = ef_product_limit(theta=risk2,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 1) & (a == 1),
+                                    weights=ipw)
+        ee_risk1 = ef_product_limit(theta=risk1,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 0) & (a == 1),
+                                    weights=ipw)
+        ee_risk0 = ef_product_limit(theta=risk0,
+                                    delta=delta,
+                                    final_time_matrix=final_time_matrix,
+                                    risk_set_matrix=risk_set_matrix,
+                                    contributions=(s == 0) & (a == 0),
+                                    weights=ipw)
+    else:
+        ee_risk3 = ef_horvitz_thompson(theta=risk3, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 1) & (a == 2), contribute_s=(s == 1), weights=ipw)
+        ee_risk2 = ef_horvitz_thompson(theta=risk2, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 1) & (a == 1), contribute_s=(s == 1), weights=ipw)
+        ee_risk1 = ef_horvitz_thompson(theta=risk1, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 0) & (a == 1), contribute_s=(s == 0), weights=ipw)
+        ee_risk0 = ef_horvitz_thompson(theta=risk0, beta=beta_all, s=s, a=a, delta=delta,
+                                       sample_matrix=sample_matrix, final_time_matrix=final_time_matrix,
+                                       contribute=(s == 0) & (a == 1), contribute_s=(s == 0), weights=ipw)
 
     # Diagnostic risk function estimation
     ee_ms = ((risk3 - risk2) + (risk1 - risk0) - np.asarray(risk_diff))[:, None] * np.ones(obs_n)

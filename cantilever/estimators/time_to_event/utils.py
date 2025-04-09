@@ -34,65 +34,82 @@ def product_limit_predict(delta, final_time_matrix, risk_set_matrix, contributio
     return np.cumprod(1 - (numerator / denominator))
 
 
+def horvitz_thompson_predict(delta, final_time_matrix, contributions, full_weights, baseline_weights=None):
+    if baseline_weights is None:
+        baseline_weights = 1
+
+    numer_matrix = final_time_matrix * delta * full_weights * contributions
+    numerator = np.sum(numer_matrix, axis=1)
+    numerator = np.cumsum(numerator)
+    denominator = np.sum(baseline_weights * contributions)
+    return numerator / denominator
+
+
+def construct_iosw(theta, s, sample_matrix):
+    # Constructing the inverse odds of sampling weights
+    pr_s = inverse_logit(np.dot(sample_matrix, theta))
+    iosw = s + ((1 - s) * (1 - pr_s) / pr_s)
+    return iosw
+
+
+def construct_iptw(theta, s, a, action_matrix):
+    gamma1 = theta[:action_matrix.shape[1]]
+    gamma0 = theta[action_matrix.shape[1]:]
+    pr_a2 = inverse_logit(np.dot(action_matrix, gamma1))
+    pr_a1 = inverse_logit(np.dot(action_matrix, gamma0))
+    iptw = ((a == 2) / pr_a2 + (a == 1) * (s == 1) / (1 - pr_a2)
+            + (a == 1) * (s == 0) / pr_a1 + (a == 0) / (1 - pr_a1))
+    return iptw
+
+
+def construct_ipcw(theta, s, censor_matrix, time_matrix_s1, strata_s1_times, time_matrix_s0, strata_s0_times,
+                   unique_censor_times, unique_event_times):
+    m_index3 = censor_matrix.shape[1] + time_matrix_s1.shape[0]
+    phi1 = theta[:m_index3]
+    phi0 = theta[m_index3:]
+
+    pr_c1 = 1 - plogit_predictions(theta=phi1, baseline_matrix=censor_matrix, time_matrix=time_matrix_s1,
+                                   strata_unique_times=strata_s1_times, all_unique_times=unique_censor_times)
+    pr_c0 = 1 - plogit_predictions(theta=phi0, baseline_matrix=censor_matrix, time_matrix=time_matrix_s0,
+                                   strata_unique_times=strata_s0_times, all_unique_times=unique_censor_times)
+    ipcw = 1 / (pr_c1 * s + pr_c0 * (1 - s))
+
+    # Aligning censor weights
+    ipcw = align_ipcw_with_event_times(event_time_vector=unique_event_times, censor_time_vector=unique_censor_times,
+                                       censor_weights=ipcw)
+    return ipcw
+
+
 def construct_weights(theta, s, a, sample_matrix, action_matrix, censor_matrix=None,
                       time_matrix_s1=None, strata_s1_times=None, time_matrix_s0=None, strata_s0_times=None,
                       unique_censor_times=None, unique_event_times=None):
+    m_index1 = sample_matrix.shape[1]
+    m_index2 = m_index1 + action_matrix.shape[1] * 2
     if censor_matrix is None:
-        m_index1 = sample_matrix.shape[1]
         beta = theta[:m_index1]
         gamma = theta[m_index1:]
-
-        # Constructing the inverse odds of sampling weights
-        pr_s = inverse_logit(np.dot(sample_matrix, beta))
-        iosw = s + ((1-s)*(1-pr_s)/pr_s)
-
-        # Constructing the inverse probability of treatment weights
-        gamma1 = gamma[:action_matrix.shape[1]]
-        gamma0 = gamma[action_matrix.shape[1]:]
-        pr_a2 = inverse_logit(np.dot(action_matrix, gamma1))
-        pr_a1 = inverse_logit(np.dot(action_matrix, gamma0))
-        iptw = ((a == 2) / pr_a2
-                + (a == 1)*(s == 1) / (1-pr_a2)
-                + (a == 1)*(s == 0) / pr_a1
-                + (a == 0) / (1-pr_a1))
-        ipw = iosw * iptw
-        return ipw
     else:
-        m_index1 = sample_matrix.shape[1]
-        m_index2 = m_index1 + action_matrix.shape[1]*2
-        m_index3 = censor_matrix.shape[1] + time_matrix_s1.shape[0]
         beta = theta[:m_index1]
         gamma = theta[m_index1:m_index2]
         phi = theta[m_index2:]
-        phi1 = phi[:m_index3]
-        phi0 = phi[m_index3:]
-
-        # Constructing the inverse odds of sampling weights
-        pr_s = inverse_logit(np.dot(sample_matrix, beta))
-        iosw = s + ((1 - s) * (1 - pr_s) / pr_s)
-
-        # Constructing the inverse probability of treatment weights
-        gamma1 = gamma[:action_matrix.shape[1]]
-        gamma0 = gamma[action_matrix.shape[1]:]
-        pr_a2 = inverse_logit(np.dot(action_matrix, gamma1))
-        pr_a1 = inverse_logit(np.dot(action_matrix, gamma0))
-        iptw = ((a == 2) / pr_a2
-                + (a == 1) * (s == 1) / (1 - pr_a2)
-                + (a == 1) * (s == 0) / pr_a1
-                + (a == 0) / (1 - pr_a1))
 
         # Constructing the inverse probability of censoring weights
-        pr_c1 = 1 - plogit_predictions(theta=phi1, baseline_matrix=censor_matrix, time_matrix=time_matrix_s1,
-                                       strata_unique_times=strata_s1_times, all_unique_times=unique_censor_times)
-        pr_c0 = 1 - plogit_predictions(theta=phi0, baseline_matrix=censor_matrix, time_matrix=time_matrix_s0,
-                                       strata_unique_times=strata_s0_times, all_unique_times=unique_censor_times)
-        ipcw = 1 / (pr_c1 * s + pr_c0 * (1 - s))
+        ipcw = construct_ipcw(theta=phi, s=s, censor_matrix=censor_matrix,
+                              time_matrix_s1=time_matrix_s1, strata_s1_times=strata_s1_times,
+                              time_matrix_s0=time_matrix_s0, strata_s0_times=strata_s0_times,
+                              unique_censor_times=unique_censor_times, unique_event_times=unique_event_times)
 
-        # Aligning censor weights
-        ipcw = align_ipcw_with_event_times(event_time_vector=unique_event_times, censor_time_vector=unique_censor_times,
-                                           censor_weights=ipcw)
+    # Constructing the inverse odds of sampling weights
+    iosw = construct_iosw(theta=beta, s=s, sample_matrix=sample_matrix)
 
-        # Computing the overall weight
+    # Constructing the inverse probability of treatment weights
+    iptw = construct_iptw(theta=gamma, s=s, a=a, action_matrix=action_matrix)
+
+    # Computing the overall weight
+    if censor_matrix is None:
+        ipw = iosw * iptw
+        return ipw
+    else:
         ipw = (iosw * iptw)[:, None] * ipcw
         return ipw.T
 

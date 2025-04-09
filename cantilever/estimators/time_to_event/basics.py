@@ -185,9 +185,9 @@ class BridgeTimeEstimator:
                                        contribute=(s == samp))
 
             # Estimating pooled logistic model
-            starting_vals = [0., ]*censor_n_params + [-5., ] + [0., ]*(time_n_params - 1)
+            starting_vals = [0., ]*censor_n_params + [-4., ] + [0., ]*(time_n_params - 1)
             estr = MEstimator(psi, init=starting_vals)
-            estr.estimate(maxiter=10000)
+            estr.estimate(maxiter=20000)
             self._censor_coefs_.append(list(estr.theta))
 
     def outcome_model(self, model):
@@ -203,7 +203,6 @@ class BridgeTimeEstimator:
             act = act_samp_combo[0]
             samp = act_samp_combo[1]
 
-            # TODO add weights
             t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=act, sample=samp)
             time_n_params = t_matrix.shape[1]
 

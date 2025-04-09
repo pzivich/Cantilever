@@ -13,12 +13,14 @@ class BridgeIPW(BridgeTimeEstimator):
     r"""IPW bridge algorithm
 
     """
-    def __init__(self, data, time, delta, action, sample, censor=None, alpha=0.05, verbose=True, decimals=2):
+    def __init__(self, data, time, delta, action, sample, censor=None, hajek=True, alpha=0.05,
+                 verbose=True, decimals=2):
         # initialize the preceding class (allows for more arguments in init than BaseEstimator)
         super().__init__(data=data, time=time, delta=delta, action=action, sample=sample, censor=censor,
                          alpha=alpha, verbose=verbose, decimals=decimals)
 
         # Updating specific parameters for g-computation
+        self._product_limit_ = hajek
         self.__estimator_label__ = "Inverse Probability Weighting"
 
     def outcome_model(self, model):
@@ -63,8 +65,10 @@ class BridgeIPW(BridgeTimeEstimator):
                                    final_time_matrix=f_matrix,
                                    risk_set_matrix=r_matrix,
                                    contribute=(s == samp) & (a == act),
+                                   contribute_s=(s == samp),
                                    unique_censor_times=u_c_times,
-                                   unique_event_times=u_times)
+                                   unique_event_times=u_times,
+                                   product_limit=self._product_limit_)
 
             # Estimating weighted product limit
             starting_vals = [0.01, ]*n_unique_times + self._sample_coefs_ + self._action_coefs_ + starting_censor
@@ -122,7 +126,8 @@ class BridgeIPW(BridgeTimeEstimator):
                                      final_time_matrix=f_matrix,
                                      risk_set_matrix=r_matrix,
                                      unique_censor_times=u_c_times,
-                                     unique_event_times=u_times)
+                                     unique_event_times=u_times,
+                                     product_limit=self._product_limit_)
 
         if self.risks is None:
             starting_vals = ([0., ] + [0., ]*n_unique_times*3
@@ -189,7 +194,8 @@ class BridgeIPW(BridgeTimeEstimator):
                                       final_time_matrix=f_matrix,
                                       risk_set_matrix=r_matrix,
                                       unique_censor_times=u_c_times,
-                                      unique_event_times=u_times)
+                                      unique_event_times=u_times,
+                                     product_limit=self._product_limit_)
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*3 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
@@ -204,7 +210,6 @@ class BridgeIPW(BridgeTimeEstimator):
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()
-        print((np.diag(estr.variance)**0.5)[:n_unique_times])
 
         # Formatting results
         results = pd.DataFrame()
@@ -250,7 +255,8 @@ class BridgeIPW(BridgeTimeEstimator):
                                      final_time_matrix=f_matrix,
                                      risk_set_matrix=r_matrix,
                                      unique_censor_times=u_c_times,
-                                     unique_event_times=u_times)
+                                     unique_event_times=u_times,
+                                     product_limit=self._product_limit_)
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*5 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
