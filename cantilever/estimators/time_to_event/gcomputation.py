@@ -14,9 +14,9 @@ class BridgeGComputation(BridgeTimeEstimator):
     r"""G-computation bridge algorithm
 
     """
-    def __init__(self, data, time, delta, action, sample, alpha=0.05, verbose=True, decimals=2):
+    def __init__(self, data, time, delta, action, sample, censor=None, alpha=0.05, verbose=True, decimals=2):
         # initialize the preceding class (allows for more arguments in init than BaseEstimator)
-        super().__init__(data=data, time=time, delta=delta, action=action, sample=sample,
+        super().__init__(data=data, time=time, delta=delta, action=action, sample=sample, censor=censor,
                          alpha=alpha, verbose=verbose, decimals=decimals)
 
         # Updating specific parameters for g-computation
@@ -39,7 +39,7 @@ class BridgeGComputation(BridgeTimeEstimator):
             raise ValueError("The function outcome_model() must be called prior to estimating the risks")
 
         n_unique_times = len(self.all_unique_times)
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
         baseline_matrix = np.asarray(matrix)
 
@@ -91,7 +91,7 @@ class BridgeGComputation(BridgeTimeEstimator):
             raise ValueError("The function outcome_model() must be called prior to estimating the diagnostic")
 
         n_unique_times = len(self.all_unique_times)
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
         baseline_matrix = np.asarray(matrix)
         t_matrix1, f_matrix1, r_matrix1, u_times1 = self._get_time_matrices_(t=t, action=1, sample=1)
@@ -143,7 +143,7 @@ class BridgeGComputation(BridgeTimeEstimator):
             raise ValueError("The function outcome_model() must be called prior to estimating the risk difference")
 
         n_unique_times = len(self.all_unique_times)
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
         baseline_matrix = np.asarray(matrix)
         t_matrix1, f_matrix1, r_matrix1, u_times1 = self._get_time_matrices_(t=t, action=2, sample=1)
@@ -190,7 +190,7 @@ class BridgeGComputation(BridgeTimeEstimator):
             raise ValueError("The function outcome_model() must be called prior to estimating the risk difference")
 
         n_unique_times = len(self.all_unique_times)
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
         baseline_matrix = np.asarray(matrix)
         t_matrix3, f_matrix3, r_matrix3, u_times3 = self._get_time_matrices_(t=t, action=2, sample=1)
