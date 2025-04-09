@@ -128,7 +128,7 @@ class BridgeTimeEstimator:
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
         self._sample_nuisance_model_ = model
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._sample_nuisance_model_, self.data)
         sample_matrix = np.asarray(matrix)
         self._sample_design_matrix_ = sample_matrix
@@ -145,7 +145,7 @@ class BridgeTimeEstimator:
 
     def action_model(self, model, init=None, bounds=(0, 1)):
         self._action_nuisance_model_ = model
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._action_nuisance_model_, self.data)
         action_matrix = np.asarray(matrix)
         self._action_design_matrix_ = action_matrix
@@ -163,23 +163,17 @@ class BridgeTimeEstimator:
 
     def censor_model(self, model, init=None, bounds=(0, 1)):
         self._censor_nuisance_model_ = model
-        t, delta, a, s = self._get_variable_arrays_()
-        if self.censor is None:
-            c = np.asarray(1 - self.data[self.delta])
-        else:
-            c = np.asarray(self.data[self.censor])
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._censor_nuisance_model_, self.data)
         censor_matrix = np.asarray(matrix)
         censor_n_params = censor_matrix.shape[1]
+        self._censor_design_matrix_ = censor_matrix
 
         # Fitting a series of pooled logistic models
         self._censor_coefs_ = []
         for samp in [1, 0]:
-            t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, sample=samp)
+            t_matrix, f_matrix, r_matrix, u_times = self._get_censor_matrices_(t=t, c=c, sample=samp)
             time_n_params = t_matrix.shape[1]
-            # TODO stopped here...
-            # TODO need to plan out better. censor-time-matrix is not necessarily same 2D as the event-time-matrix
-            # TODO so, need a clever way to align them
 
             def psi(theta):
                 return ef_pooled_logit(theta=theta,
@@ -191,15 +185,14 @@ class BridgeTimeEstimator:
                                        contribute=(s == samp))
 
             # Estimating pooled logistic model
-            starting_vals = [0., ]*censor_n_params + [-4., ] + [0., ]*(time_n_params - 1)
+            starting_vals = [0., ]*censor_n_params + [-5., ] + [0., ]*(time_n_params - 1)
             estr = MEstimator(psi, init=starting_vals)
-            estr.estimate()
+            estr.estimate(maxiter=10000)
             self._censor_coefs_.append(list(estr.theta))
 
     def outcome_model(self, model):
         self._outcome_nuisance_model_ = model
-
-        t, delta, a, s = self._get_variable_arrays_()
+        t, delta, a, s, c = self._get_variable_arrays_()
         matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
         baseline_matrix = np.asarray(matrix)
         baseline_n_params = baseline_matrix.shape[1]
@@ -349,7 +342,11 @@ class BridgeTimeEstimator:
         delta = np.asarray((self.data[self.delta]))
         a = np.asarray((self.data[self.action]))
         s = np.asarray((self.data[self.sample]))
-        return t, delta, a, s
+        if self.censor is None:
+            c = np.asarray(1 - self.data[self.delta])
+        else:
+            c = np.asarray(self.data[self.censor])
+        return t, delta, a, s, c
 
     def _get_time_matrices_(self, t, action=None, sample=None):
         if sample is None:
@@ -364,6 +361,20 @@ class BridgeTimeEstimator:
                                                             & (self.data[self.action] == action)
                                                             & (self.data[self.sample] == sample),
                                                             self.time]))
+        unique_times = np.asarray(unique_times)
+
+        # Creating design matrices
+        time_design_matrix = np.identity(n=len(unique_times))
+        time_design_matrix[:, 0] = 1
+
+        # Creating other arrays
+        r_matrix = (t >= unique_times[:, None]).astype(int)
+        r_star_matrix = (t == unique_times[:, None]).astype(int)
+        return time_design_matrix, r_star_matrix, r_matrix, unique_times
+
+    def _get_censor_matrices_(self, t, c, sample):
+        unique_times = list(np.unique(self.data.loc[(c == 1) & (self.data[self.sample] == sample),
+                                                    self.time]))
         unique_times = np.asarray(unique_times)
 
         # Creating design matrices
