@@ -164,6 +164,118 @@ def ef_diagnostic_ipw(theta, s, a, c,
     return np.vstack([ee_ird, ee_diag, ee_risk1, ee_risk0, ee_weights])
 
 
+def ef_single_span_ipw(theta, s, a, c,
+                       delta, sample_matrix, action_matrix, censor_matrix,
+                       time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
+                       time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
+                       final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times):
+    n_unique_times = risk_set_matrix.shape[0]
+    obs_n = delta.shape[0]
+    risk_diff = np.asarray(theta[:n_unique_times])
+    risk1 = np.asarray(theta[n_unique_times: n_unique_times*2])
+    risk0 = np.asarray(theta[n_unique_times*2: n_unique_times*3])
+    beta_all = theta[n_unique_times*3:]
+
+    # Nuisance models for weights and getting back weights
+    ee_weights = ef_weight_models(theta=beta_all, s=s, a=a, c=c,
+                                  sample_matrix=sample_matrix, action_matrix=action_matrix,
+                                  censor_matrix=censor_matrix,
+                                  time_matrix_s1=time_matrix_s1,
+                                  final_time_matrix_s1=final_time_matrix_s1,
+                                  risk_set_matrix_s1=risk_set_matrix_s1,
+                                  time_matrix_s0=time_matrix_s0,
+                                  final_time_matrix_s0=final_time_matrix_s0,
+                                  risk_set_matrix_s0=risk_set_matrix_s0)
+    ipw = construct_weights(theta=beta_all, s=s, a=a,
+                            sample_matrix=sample_matrix, action_matrix=action_matrix, censor_matrix=censor_matrix,
+                            time_matrix_s1=time_matrix_s1, strata_s1_times=strata_s1_times,
+                            time_matrix_s0=time_matrix_s0, strata_s0_times=strata_s0_times,
+                            unique_censor_times=unique_censor_times,
+                            unique_event_times=unique_event_times
+                            )
+    # Estimating risk function via product limit
+    ee_risk1 = ef_product_limit(theta=risk1,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 1) & (a == 2),
+                                weights=ipw)
+    ee_risk0 = ef_product_limit(theta=risk0,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 0) & (a == 0),
+                                weights=ipw)
+
+    # Diagnostic risk function estimation
+    ee_ss = ((risk1 - risk0) - np.asarray(risk_diff))[:, None] * np.ones(obs_n)
+    # Returning stacked estimating equations
+    return np.vstack([ee_ss, ee_risk1, ee_risk0, ee_weights])
+
+
+def ef_multi_span_ipw(theta, s, a, c,
+                      delta, sample_matrix, action_matrix, censor_matrix,
+                      time_matrix_s1, final_time_matrix_s1, risk_set_matrix_s1, strata_s1_times,
+                      time_matrix_s0, final_time_matrix_s0, risk_set_matrix_s0, strata_s0_times,
+                      final_time_matrix, risk_set_matrix, unique_event_times, unique_censor_times):
+    n_unique_times = risk_set_matrix.shape[0]
+    obs_n = delta.shape[0]
+    risk_diff = np.asarray(theta[:n_unique_times])
+    risk3 = np.asarray(theta[n_unique_times: n_unique_times*2])
+    risk2 = np.asarray(theta[n_unique_times*2: n_unique_times*3])
+    risk1 = np.asarray(theta[n_unique_times*3: n_unique_times*4])
+    risk0 = np.asarray(theta[n_unique_times*4: n_unique_times*5])
+    beta_all = theta[n_unique_times*5:]
+
+    # Nuisance models for weights and getting back weights
+    ee_weights = ef_weight_models(theta=beta_all, s=s, a=a, c=c,
+                                  sample_matrix=sample_matrix, action_matrix=action_matrix,
+                                  censor_matrix=censor_matrix,
+                                  time_matrix_s1=time_matrix_s1,
+                                  final_time_matrix_s1=final_time_matrix_s1,
+                                  risk_set_matrix_s1=risk_set_matrix_s1,
+                                  time_matrix_s0=time_matrix_s0,
+                                  final_time_matrix_s0=final_time_matrix_s0,
+                                  risk_set_matrix_s0=risk_set_matrix_s0)
+    ipw = construct_weights(theta=beta_all, s=s, a=a,
+                            sample_matrix=sample_matrix, action_matrix=action_matrix, censor_matrix=censor_matrix,
+                            time_matrix_s1=time_matrix_s1, strata_s1_times=strata_s1_times,
+                            time_matrix_s0=time_matrix_s0, strata_s0_times=strata_s0_times,
+                            unique_censor_times=unique_censor_times,
+                            unique_event_times=unique_event_times
+                            )
+    # Estimating risk function via product limit
+    ee_risk3 = ef_product_limit(theta=risk3,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 1) & (a == 2),
+                                weights=ipw)
+    ee_risk2 = ef_product_limit(theta=risk2,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 1) & (a == 1),
+                                weights=ipw)
+    ee_risk1 = ef_product_limit(theta=risk1,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 0) & (a == 1),
+                                weights=ipw)
+    ee_risk0 = ef_product_limit(theta=risk0,
+                                delta=delta,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contributions=(s == 0) & (a == 0),
+                                weights=ipw)
+
+    # Diagnostic risk function estimation
+    ee_ms = ((risk3 - risk2) + (risk1 - risk0) - np.asarray(risk_diff))[:, None] * np.ones(obs_n)
+    # Returning stacked estimating equations
+    return np.vstack([ee_ms, ee_risk3, ee_risk2, ee_risk1, ee_risk0, ee_weights])
+
+
 def ef_pooled_logit(theta, delta, baseline_matrix, time_matrix, final_time_matrix, risk_set_matrix, contribute):
     baseline_n_params = baseline_matrix.shape[1]
     beta_x = theta[:baseline_n_params]
