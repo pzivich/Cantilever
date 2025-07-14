@@ -276,7 +276,7 @@ class BridgeTimeEstimator:
         # Returning the plot to user
         return ax
 
-    def plot_diagnostic(self, ax=None, color='k', favors=True, favors_label=("S=1", "S=0"), favors_spacing="\t\t\t"):
+    def plot_diagnostic(self, ax=None, color='k', favors=True, favors_label=("S=1", "S=0"), favors_spacing="\t"):
         # Estimating risks and their CI's1
         if self.diagnostic is None:
             self.estimate_diagnostic()
@@ -296,7 +296,7 @@ class BridgeTimeEstimator:
         # Returning the plot to user
         return ax
 
-    def plot_single_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t\t\t"):
+    def plot_single_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t"):
         # Estimating risks and their CI's
         if self.single_span is None:
             self.estimate_single_span()
@@ -316,7 +316,7 @@ class BridgeTimeEstimator:
         # Returning the plot to user
         return ax
 
-    def plot_multi_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t\t\t"):
+    def plot_multi_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t"):
         # Estimating risks and their CI's
         if self.multi_span is None:
             self.estimate_multi_span()
