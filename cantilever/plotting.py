@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 
 def twister_plot(data, point, lcl, ucl, time, color='k', reference_line=0.0, log_scale=False,
-                 favors=True, favors_label=("Treatment", "Placebo"), favors_spacing="\t\t\t", step=True, ax=None):
+                 favors=True, favors_label=("Treatment", "Placebo"), favors_spacing="\t", step=True, ax=None):
     """Function to generate a twister plot for the risk difference or risk ratio from survival or longitundinal
     analysis results. Twister plots are an alternative to the dynamic risk plots.
 
