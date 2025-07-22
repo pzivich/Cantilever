@@ -10,7 +10,7 @@ def fit_mestimator(estimating_functions, init, solver, maxiter, tolerance, deriv
     return estr
 
 
-def print_nuisance_model_results(labels, m_estimator, decimals=3):
+def print_nuisance_model_results(labels, m_estimator, decimals=3, subset=None):
     r = pd.DataFrame()
     r['_'] = labels
     r['_'] = r['_'].str.slice(0, 25)
@@ -21,5 +21,7 @@ def print_nuisance_model_results(labels, m_estimator, decimals=3):
     r['LCL'] = conf_int[:, 0]
     r['UCL'] = conf_int[:, 1]
     r = r.set_index("_")
+    if subset is not None:
+        r = r.iloc[subset].copy()
     print(r.round(decimals))
 
