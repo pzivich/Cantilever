@@ -1,12 +1,14 @@
 import warnings
 import numpy as np
 import pandas as pd
-from delicatessen.estimating_equations import ee_regression
-from delicatessen.utilities import inverse_logit
+from delicatessen.utilities import identity, inverse_logit
 
 from cantilever.formulas import get_design_matrix
 from cantilever.estimators.point.efuncs import psi_action, psi_sample, psi_missing, psi_outcome
-from cantilever.estimators.utils import fit_mestimator, print_nuisance_model_results
+from cantilever.estimators.utils import (fit_mestimator,
+                                         compute_action_score, compute_sample_score, compute_missing_score,
+                                         descriptive_stats_w, descriptive_stats_r,
+                                         print_nuisance_model_results)
 
 
 class BridgePointEstimator:
@@ -391,7 +393,6 @@ class BridgePointEstimator:
         var = np.diag(self.mestimator.variance)
         ci = self.mestimator.confidence_intervals(alpha=self.alpha)
         pval = self.mestimator.p_values(null=0)
-
         id_n = 7
 
         # Setting up outputs
@@ -491,8 +492,138 @@ class BridgePointEstimator:
         print("==============================================================")
 
     def save_results(self, file):
+        r"""
+
+        Parameters
+        ----------
+        file
+
+        Returns
+        -------
+
+        """
         table = self.results_table()
         table.to_csv(file=file+".csv")
 
-    # TODO build out other diagnostic procedures
-    # TODO build out some plotting functionalities
+    def diagnostics_weights(self):
+        r"""
+
+        Returns
+        -------
+
+        """
+        if self._sample_coefs_ is None or self._action_coefs_ is None:
+            raise ValueError("Nuisance models for weights must be specified prior to running the diagnostics...")
+
+        y_nan, a, s, m = self._get_variable_arrays_()
+        print("==============================================================")
+        print("Weight Diagnostics")
+        print("==============================================================")
+
+        # IPTW diagnostics
+        print("Inverse Probability of Treatment Weights")
+        print(" * The overall 'Mean' column should be near 2")
+        print(" * Action-specific 'Sum' columns should be approximately equal")
+        pi_a = compute_action_score(a=a, s=s, design_Z=self._action_design_matrix_, param=self._action_coefs_,
+                                    clip=self._truncation_pract_)
+        iptw = 1 / pi_a
+        a_s0 = a[s == 0]
+        w_s0 = iptw[s == 0]
+        print("--------------------------------------------------------------")
+        print(self.sample + " = 0")
+        print("--------------------------------------------------------------")
+        descriptive_stats_w(var=a_s0, values=[0, 1], w=w_s0, label=self.action,
+                            include_overall=True, decimals=self._decimals_)
+        a_s1 = a[s == 1]
+        w_s1 = iptw[s == 1]
+        print("--------------------------------------------------------------")
+        print(self.sample + " = 1")
+        print("--------------------------------------------------------------")
+        descriptive_stats_w(var=a_s1, values=[1, 2], w=w_s1, label=self.action,
+                            include_overall=True, decimals=self._decimals_)
+        print("==============================================================")
+
+        # IOSW diagnostics
+        print("Inverse Odds of Sampling Weights")
+        print(" * The 'Sum' columns should be approximately equal")
+        pi_s = compute_sample_score(s=s, design_V=self._sample_design_matrix_, param=self._sample_coefs_,
+                                    clip=self._truncation_prsamp_)
+        iosw = 1 / pi_s
+        print("--------------------------------------------------------------")
+        descriptive_stats_w(var=s, values=[0, 1], w=iosw, label=self.sample,
+                            decimals=self._decimals_)
+        print("==============================================================")
+
+        # IPMW diagnostics
+        if self._missing_nuisance_model_ is not None:
+            pi_m = compute_missing_score(param=self._missing_coefs_, design_W=self._missing_design_matrix_,
+                                         clip=self._truncation_prmiss_)
+            ipmw = 1 / pi_m
+            m_s0 = m[s == 0]
+            w_s0 = ipmw[s == 0]
+            print("Inverse Probability of Missing Weights")
+            print("--------------------------------------------------------------")
+            print(self.sample + " = 0")
+            print(" * 'Sum' of " + self.sample + " = 0 should be approximately " + str(np.sum(1-s)))
+            print("--------------------------------------------------------------")
+            descriptive_stats_w(var=m_s0, values=[1, ], w=w_s0, label="Observed",
+                                decimals=self._decimals_)
+            m_s1 = m[s == 1]
+            w_s1 = ipmw[s == 1]
+            print("--------------------------------------------------------------")
+            print(self.sample + " = 1")
+            print(" * 'Sum' of " + self.sample + " = 1 should be approximately " + str(np.sum(s)))
+            print("--------------------------------------------------------------")
+            descriptive_stats_w(var=m_s1, values=[1, ], w=w_s1, label="Observed",
+                                decimals=self._decimals_)
+            print("==============================================================")
+        else:
+            ipmw = 1
+
+        # Overall Weight Diagnostics
+        print("Overall Inverse Probability Weights")
+        print(" * Check no extreme weights appear after multiplying together")
+        print("--------------------------------------------------------------")
+        ipw = iptw * iosw * ipmw
+        s_m1 = s[m == 1]
+        w_m1 = ipw[m == 1]
+        descriptive_stats_w(var=s_m1, values=[0, 1], w=w_m1, label=self.sample,
+                            decimals=self._decimals_)
+        print("==============================================================")
+
+        # TODO other diagnostics: boxplot of scores, standardized mean differences
+
+    def diagnostics_outcome(self):
+        r"""
+
+        Returns
+        -------
+
+        """
+        if self._outcome_coefs_ is None:
+            raise ValueError("Outcome nuisance model must be specified prior to running the diagnostics...")
+
+        y_nan, a, s, m = self._get_variable_arrays_()
+        X = self._outcome_design_matrix_
+        beta1 = self._outcome_coefs_[:X.shape[1]]
+        beta0 = self._outcome_coefs_[X.shape[1]:]
+
+        if self._outcome_model_dist_ == 'linear':
+            transform = identity
+        elif self._outcome_model_dist_ == 'logistic':
+            transform = inverse_logit
+        elif self._outcome_model_dist_ == 'poisson':
+            transform = np.exp
+        else:
+            raise ValueError("The outcome model specification " + str(self._outcome_model_dist_) + " is not supported.")
+
+        print("==============================================================")
+        print("Outcome Regression Residuals")
+        print(" * Skewed or large residual may indicate misspecification")
+        print("--------------------------------------------------------------")
+        y_hat = transform(np.dot(X, beta1))*s + transform(np.dot(X, beta0))*(1-s)
+        s1 = s[m == 1]
+        resid = (y_hat - y_nan)[m == 1]
+        descriptive_stats_r(study=s1, residual=resid, label=self.sample, decimals=3)
+        print("==============================================================")
+

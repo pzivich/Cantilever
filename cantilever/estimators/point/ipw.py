@@ -23,6 +23,10 @@ class BridgeIPW(BridgePointEstimator):
         warnings.warn("`BridgeIPW` does not use the outcome model. No outcome model was fit.",
                       UserWarning)
 
+    def diagnostics_outcome(self):
+        warnings.warn("`BridgeIPW` does not use an outcome model, so no outcome regression diagnostics are available.",
+                      UserWarning)
+
     def estimate(self, init=None):
         """
 

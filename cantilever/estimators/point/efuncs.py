@@ -2,6 +2,8 @@ import numpy as np
 from delicatessen.estimating_equations import ee_regression
 from delicatessen.utilities import inverse_logit, identity
 
+from cantilever.estimators.utils import compute_action_score, compute_sample_score, compute_missing_score
+
 
 def psi_action(theta, Z, a, s):
     alpha1 = theta[:Z.shape[1]]
@@ -41,23 +43,17 @@ def psi_weighted_outcome(theta, y, a, s, m, Z, V, W, X, model, a_clip, s_clip, m
 
     # Action model step
     ee_act = psi_action(theta=alpha, Z=Z, a=a, s=s)
-    pi_a = ((1 - s) * inverse_logit(np.dot(Z, alpha[:id_as]))
-            + s * inverse_logit(np.dot(Z, alpha[id_as:])))
-    pi_a = np.clip(pi_a, a_min=a_clip[0], a_max=a_clip[1])
-    pi_a = ((a == 0) * (1 - pi_a) + (1 - s) * (a == 1) * pi_a + s * (a == 1) * (1 - pi_a) + (a == 2) * pi_a)
+    pi_a = compute_action_score(a=a, s=s, param=alpha, design_Z=Z, clip=a_clip)
 
     # Sampling model step
     ee_smp = psi_sample(theta=gamma, V=V, s=s)
-    pi_s = inverse_logit(np.dot(V, gamma))
-    pi_s = np.clip(pi_s, a_min=s_clip[0], a_max=s_clip[1])
-    pi_s = s * 1 + (1 - s) * (1 - pi_s) / pi_s
+    pi_s = compute_sample_score(s=s, param=gamma, design_V=V, clip=s_clip)
 
     # Missing model step (optional)
     if include_missing:
         eta = theta[id_s:]
         ee_mis = psi_missing(theta=eta, W=W, m=m)
-        pi_m = inverse_logit(np.dot(W, eta))
-        pi_m = np.clip(pi_m, a_min=m_clip[0], a_max=m_clip[1])
+        pi_m = compute_missing_score(param=eta, design_W=W, clip=m_clip)
         ipw = 1 / (pi_a * pi_s * pi_m)
         nuisance_models = [ee_act, ee_smp, ee_mis]
     else:

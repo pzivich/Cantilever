@@ -80,6 +80,10 @@ class BridgeGComputation(BridgePointEstimator):
         warnings.warn("`BridgeGComputation` does not use the missing model. No missing model was fit.",
                       UserWarning)
 
+    def diagnostics_weights(self):
+        warnings.warn("`BridgeGComputation` does not use weights, so no weight diagnostics are available.",
+                      UserWarning)
+
     def estimate(self, init=None):
         """Estimate the bridged comparison.
 
