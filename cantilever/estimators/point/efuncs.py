@@ -1,11 +1,77 @@
 import numpy as np
+from delicatessen.estimating_equations import ee_regression
 from delicatessen.utilities import inverse_logit, identity
 
-from cantilever.estimators.point.basics import psi_outcome, psi_action, psi_sample, psi_missing
+
+def psi_action(theta, Z, a, s):
+    alpha1 = theta[:Z.shape[1]]
+    alpha2 = theta[Z.shape[1]:]
+    ee_act1 = ee_regression(alpha2, X=Z, y=a-1, model='logistic') * s
+    ee_act2 = ee_regression(alpha1, X=Z, y=a, model='logistic') * (1 - s)
+    return np.vstack([ee_act1, ee_act2])
 
 
-def psi_bridge_point(theta, y, a, s, m, X, Xa2, Xa1, Xa0, out_model, Z, V, W, a_clip, s_clip, m_clip, include_missing,
-                     aipw_implementation):
+def psi_sample(theta, V, s):
+    ee_smp = ee_regression(theta, X=V, y=s, model='logistic')
+    return ee_smp
+
+
+def psi_missing(theta, W, m):
+    ee_mis = ee_regression(theta, X=W, y=m, model='logistic')
+    return ee_mis
+
+
+def psi_outcome(theta, X, y, s, m, model, weights):
+    beta1 = theta[:X.shape[1]]
+    beta0 = theta[X.shape[1]:]
+    ee_out1 = ee_regression(theta=beta1, X=X, y=y, model=model, weights=weights) * s * m
+    ee_out0 = ee_regression(theta=beta0, X=X, y=y, model=model, weights=weights) * (1-s) * m
+    return np.vstack([ee_out1, ee_out0])
+
+
+def psi_weighted_outcome(theta, y, a, s, m, Z, V, W, X, model, a_clip, s_clip, m_clip, include_missing):
+    # Dividing parameters into pieces
+    id_x = X.shape[1]*2
+    id_as = Z.shape[1]
+    id_a = id_x + 2*id_as
+    id_s = id_a + V.shape[1]
+    beta = theta[:id_x]
+    alpha = theta[id_x: id_a]
+    gamma = theta[id_a:id_s]
+
+    # Action model step
+    ee_act = psi_action(theta=alpha, Z=Z, a=a, s=s)
+    pi_a = ((1 - s) * inverse_logit(np.dot(Z, alpha[:id_as]))
+            + s * inverse_logit(np.dot(Z, alpha[id_as:])))
+    pi_a = np.clip(pi_a, a_min=a_clip[0], a_max=a_clip[1])
+    pi_a = ((a == 0) * (1 - pi_a) + (1 - s) * (a == 1) * pi_a + s * (a == 1) * (1 - pi_a) + (a == 2) * pi_a)
+
+    # Sampling model step
+    ee_smp = psi_sample(theta=gamma, V=V, s=s)
+    pi_s = inverse_logit(np.dot(V, gamma))
+    pi_s = np.clip(pi_s, a_min=s_clip[0], a_max=s_clip[1])
+    pi_s = s * 1 + (1 - s) * (1 - pi_s) / pi_s
+
+    # Missing model step (optional)
+    if include_missing:
+        eta = theta[id_s:]
+        ee_mis = psi_missing(theta=eta, W=W, m=m)
+        pi_m = inverse_logit(np.dot(W, eta))
+        pi_m = np.clip(pi_m, a_min=m_clip[0], a_max=m_clip[1])
+        ipw = 1 / (pi_a * pi_s * pi_m)
+        nuisance_models = [ee_act, ee_smp, ee_mis]
+    else:
+        ipw = 1 / (pi_a * pi_s)
+        nuisance_models = [ee_act, ee_smp]
+    ee_weights = np.vstack(nuisance_models)
+
+    # Weighted outcome models
+    ee_out = psi_outcome(theta=beta, X=X, y=y, s=s, m=m, model=model, weights=ipw)
+
+    return np.vstack([ee_out, ee_weights])
+
+
+def psi_bridge_point(theta, y, a, s, m, X, Xa2, Xa1, Xa0, out_model, Z, V, W, a_clip, s_clip, m_clip, include_missing):
     """Stacked estimating functions for the bridged treatment comparison with a point action and outcome.
 
     Parameters
@@ -27,7 +93,6 @@ def psi_bridge_point(theta, y, a, s, m, X, Xa2, Xa1, Xa0, out_model, Z, V, W, a_
     s_clip
     m_clip
     include_missing
-    aipw_implementation
 
     Returns
     -------
@@ -99,7 +164,7 @@ def psi_bridge_point(theta, y, a, s, m, X, Xa2, Xa1, Xa0, out_model, Z, V, W, a_
             transform = np.exp
         else:
             raise ValueError("The outcome model specification " + str(out_model) + " is not supported.")
-        if Z is not None and aipw_implementation.lower() == "weighted-regression":
+        if Z is not None:
             ee_out = psi_outcome(theta=beta, X=X, y=y, s=s, m=m, model=out_model, weights=ipw)
         else:
             ee_out = psi_outcome(theta=beta, X=X, y=y, s=s, m=m, model=out_model, weights=None)
@@ -138,20 +203,11 @@ def psi_bridge_point(theta, y, a, s, m, X, Xa2, Xa1, Xa0, out_model, Z, V, W, a_
         ee_mean11 = s * m * (a == 1) * ipw * (y - mu[1])
         ee_mean01 = (1 - s) * m * (a == 1) * ipw * (y - mu[2])
         ee_mean00 = (1 - s) * m * (a == 0) * ipw * (y - mu[3])
-    elif Z is None or aipw_implementation.lower() == "weighted-regression":
+    else:
         ee_mean12 = s * (y2hat - mu[0])
         ee_mean11 = s * (y1ahat - mu[1])
         ee_mean01 = s * (y1bhat - mu[2])
         ee_mean00 = s * (y0hat - mu[3])
-    elif aipw_implementation.lower() == "classic":
-        ee_mean12 = s * ((y*m*(a == 2)*ipw - y2hat*((a == 2)-pi)/pi) - mu[0])
-        ee_mean11 = s * ((y*m*(a == 1)*ipw + y1ahat*((a == 1)-pi)/(1-pi)) - mu[1])
-        ee_mean01 = (1-s) * m * (a == 1) * ipw * (y - y1bhat) + s*(y1bhat - mu[2])
-        ee_mean00 = (1-s) * m * (a == 0) * ipw * (y - y0hat) + s*(y0hat - mu[3])
-        pass
-    else:
-        raise ValueError("Invalid AIPW specification. This error should never actually be reached due to prior errors "
-                         "that should arise.")
 
     # Returning the estimating functions
     return np.vstack([ee_ss, ee_ms, ee_diag,
