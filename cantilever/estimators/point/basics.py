@@ -5,6 +5,7 @@ from delicatessen.estimating_equations import ee_regression
 from delicatessen.utilities import inverse_logit
 
 from cantilever.formulas import get_design_matrix
+from cantilever.estimators.point.efuncs import psi_action, psi_sample, psi_missing, psi_outcome
 from cantilever.estimators.utils import fit_mestimator, print_nuisance_model_results
 
 
@@ -478,11 +479,13 @@ class BridgePointEstimator:
         fmt = "No. Observations: {:<10} | No. Input:        {:<10}"
         print(fmt.format(self.__estimator_n__, self.__original_n__))
         fmt = "No. w/ Outcomes:  {:<10} | Outcome:          {:<10}"
-        print(fmt.format(self.outcome, self.__outcomes_n__))
+        print(fmt.format(self.__outcomes_n__, self.outcome))
         fmt = "Action:           {:<10} | Sample:           {:<10}"
         print(fmt.format(self.action, self.sample))
         fmt = "Outcome type:     {:<10} | Model:            {:<10}"
         print(fmt.format(self.__outcome_type__, self._outcome_model_dist_))
+        fmt = "Alpha:            {:<10} | "
+        print(fmt.format(self.alpha))
         print("--------------------------------------------------------------")
         print(table.round(decimals=self._decimals_))
         print("==============================================================")
@@ -493,73 +496,3 @@ class BridgePointEstimator:
 
     # TODO build out other diagnostic procedures
     # TODO build out some plotting functionalities
-
-
-# Estimating functions used by the bridge point estimators
-def psi_action(theta, Z, a, s):
-    alpha1 = theta[:Z.shape[1]]
-    alpha2 = theta[Z.shape[1]:]
-    ee_act1 = ee_regression(alpha2, X=Z, y=a-1, model='logistic') * s
-    ee_act2 = ee_regression(alpha1, X=Z, y=a, model='logistic') * (1 - s)
-    return np.vstack([ee_act1, ee_act2])
-
-
-def psi_sample(theta, V, s):
-    ee_smp = ee_regression(theta, X=V, y=s, model='logistic')
-    return ee_smp
-
-
-def psi_missing(theta, W, m):
-    ee_mis = ee_regression(theta, X=W, y=m, model='logistic')
-    return ee_mis
-
-
-def psi_outcome(theta, X, y, s, m, model, weights):
-    beta1 = theta[:X.shape[1]]
-    beta0 = theta[X.shape[1]:]
-    ee_out1 = ee_regression(theta=beta1, X=X, y=y, model=model, weights=weights) * s * m
-    ee_out0 = ee_regression(theta=beta0, X=X, y=y, model=model, weights=weights) * (1-s) * m
-    return np.vstack([ee_out1, ee_out0])
-
-
-def psi_weighted_outcome(theta, y, a, s, m, Z, V, W, X, model, a_clip, s_clip, m_clip, include_missing):
-    # Dividing parameters into pieces
-    id_x = X.shape[1]*2
-    id_as = Z.shape[1]
-    id_a = id_x + 2*id_as
-    id_s = id_a + V.shape[1]
-    beta = theta[:id_x]
-    alpha = theta[id_x: id_a]
-    gamma = theta[id_a:id_s]
-
-    # Action model step
-    ee_act = psi_action(theta=alpha, Z=Z, a=a, s=s)
-    pi_a = ((1 - s) * inverse_logit(np.dot(Z, alpha[:id_as]))
-            + s * inverse_logit(np.dot(Z, alpha[id_as:])))
-    pi_a = np.clip(pi_a, a_min=a_clip[0], a_max=a_clip[1])
-    pi_a = ((a == 0) * (1 - pi_a) + (1 - s) * (a == 1) * pi_a + s * (a == 1) * (1 - pi_a) + (a == 2) * pi_a)
-
-    # Sampling model step
-    ee_smp = psi_sample(theta=gamma, V=V, s=s)
-    pi_s = inverse_logit(np.dot(V, gamma))
-    pi_s = np.clip(pi_s, a_min=s_clip[0], a_max=s_clip[1])
-    pi_s = s * 1 + (1 - s) * (1 - pi_s) / pi_s
-
-    # Missing model step (optional)
-    if include_missing:
-        eta = theta[id_s:]
-        ee_mis = psi_missing(theta=eta, W=W, m=m)
-        pi_m = inverse_logit(np.dot(W, eta))
-        pi_m = np.clip(pi_m, a_min=m_clip[0], a_max=m_clip[1])
-        ipw = 1 / (pi_a * pi_s * pi_m)
-        nuisance_models = [ee_act, ee_smp, ee_mis]
-    else:
-        ipw = 1 / (pi_a * pi_s)
-        nuisance_models = [ee_act, ee_smp]
-    ee_weights = np.vstack(nuisance_models)
-
-    # Weighted outcome models
-    ee_out = psi_outcome(theta=beta, X=X, y=y, s=s, m=m,
-                         model=model, weights=ipw)
-
-    return np.vstack([ee_out, ee_weights])

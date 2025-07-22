@@ -1,12 +1,9 @@
 import warnings
 import numpy as np
 import pandas as pd
-from delicatessen.utilities import inverse_logit, identity
 
-from cantilever.formulas import get_design_matrix
-from cantilever.estimators.utils import print_nuisance_model_results
-from cantilever.estimators.efuncs import psi_bridge_point
-from cantilever.estimators.point.basics import BridgePointEstimator, psi_outcome
+from cantilever.estimators.point.basics import BridgePointEstimator
+from cantilever.estimators.point.efuncs import psi_bridge_point
 
 
 class BridgeGComputation(BridgePointEstimator):
@@ -105,8 +102,7 @@ class BridgeGComputation(BridgePointEstimator):
                                     X=self._outcome_design_matrix_, Xa2=Xa2, Xa1=Xa1, Xa0=Xa0,
                                     out_model=self._outcome_model_dist_,
                                     Z=None, V=None, W=None, a_clip=None, s_clip=None, m_clip=None,
-                                    include_missing=False,
-                                    aipw_implementation=None)
+                                    include_missing=False)
 
         # Solving the estimating equations for the parameter of interest
         init = self._generate_inits_(init=init, n_params=7)

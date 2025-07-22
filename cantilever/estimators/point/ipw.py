@@ -1,12 +1,9 @@
 import warnings
 import numpy as np
 import pandas as pd
-from delicatessen.utilities import inverse_logit
 
-from cantilever.formulas import get_design_matrix
-from cantilever.estimators.efuncs import psi_bridge_point
-from cantilever.estimators.utils import fit_mestimator, print_nuisance_model_results
-from cantilever.estimators.point.basics import BridgePointEstimator, psi_action, psi_sample, psi_missing
+from cantilever.estimators.point.basics import BridgePointEstimator
+from cantilever.estimators.point.efuncs import psi_bridge_point
 
 
 class BridgeIPW(BridgePointEstimator):
@@ -52,8 +49,7 @@ class BridgeIPW(BridgePointEstimator):
                                     Z=self._action_design_matrix_, V=self._sample_design_matrix_,
                                     W=self._missing_design_matrix_, a_clip=self._truncation_pract_,
                                     s_clip=self._truncation_prsamp_, m_clip=self._truncation_prmiss_,
-                                    include_missing=include_m,
-                                    aipw_implementation=None)
+                                    include_missing=include_m)
 
         # Initial values for the root-finding procedure (iteratively builds on previous fits)
         init = self._generate_inits_(init=init, n_params=7)
