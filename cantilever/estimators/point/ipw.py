@@ -69,8 +69,8 @@ class BridgeIPW(BridgePointEstimator):
 
     References
     ----------
-    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2023). Fusing Trial Data for
-    Treatment Comparisons: Single versus Multi-Span Bridging. *arXiv:2305.00845*.
+    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2024). Fusing Trial Data for
+    Treatment Comparisons: Single versus Multi-Span Bridging. *Statistics in Medicine*, 43(4):793-815..
     """
 
     def __init__(self, data, outcome, action, sample, alpha=0.05, verbose=True, decimals=2):
@@ -126,3 +126,14 @@ class BridgeIPW(BridgePointEstimator):
 
         # Solving the estimating equations for the parameter of interest
         self.mestimator = self._fit_mestimator_(estimating_functions=psi, init=init)
+
+    def diagnostics(self):
+        """
+
+        Returns
+        -------
+
+        """
+        self.diagnostics_weights()
+        print("")
+        self.diagnostic_shared()

@@ -60,8 +60,8 @@ class BridgeGComputation(BridgePointEstimator):
 
     References
     ----------
-    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2023). Fusing Trial Data for
-    Treatment Comparisons: Single versus Multi-Span Bridging. *arXiv:2305.00845*.
+    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2024). Fusing Trial Data for
+    Treatment Comparisons: Single versus Multi-Span Bridging. *Statistics in Medicine*, 43(4):793-815..
     """
     def __init__(self, data, outcome, action, sample, alpha=0.05, verbose=True, decimals=2):
         # initialize the preceding class (allows for more arguments in init than BaseMeanEstimator)
@@ -119,3 +119,14 @@ class BridgeGComputation(BridgePointEstimator):
         init = self._generate_inits_(init=init, n_params=7)
         init = init + list(self._outcome_coefs_)
         self.mestimator = self._fit_mestimator_(estimating_functions=psi, init=init)
+
+    def diagnostics(self):
+        """
+
+        Returns
+        -------
+
+        """
+        self.diagnostics_outcome()
+        print("")
+        self.diagnostic_shared()

@@ -71,8 +71,8 @@ class BridgeAIPW(BridgePointEstimator):
 
     References
     ----------
-    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2023). Fusing Trial Data for
-    Treatment Comparisons: Single versus Multi-Span Bridging. *arXiv:2305.00845*.
+    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2024). Fusing Trial Data for
+    Treatment Comparisons: Single versus Multi-Span Bridging. *Statistics in Medicine*, 43(4):793-815..
     """
     def __init__(self, data, outcome, action, sample, alpha=0.05, verbose=True, decimals=2):
         # initialize the preceding class (this allows for more arguments in init than available in BaseMeanEstimator)
@@ -161,3 +161,16 @@ class BridgeAIPW(BridgePointEstimator):
             print("====================================================================")
 
         return list(estr.theta)
+
+    def diagnostics(self):
+        """
+
+        Returns
+        -------
+
+        """
+        self.diagnostics_weights()
+        print("")
+        self.diagnostics_outcome()
+        print("")
+        self.diagnostic_shared()

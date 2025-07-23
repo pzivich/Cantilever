@@ -537,6 +537,18 @@ class BridgePointEstimator:
         fmt = "Model:              {:<11} | Method:             {:<11}"
         print(fmt.format(family, self.solver))
 
+    def _summary_details_(self):
+        fmt = "No. Observations: {:<10} | No. Input:        {:<10}"
+        print(fmt.format(self.__estimator_n__, self.__original_n__))
+        fmt = "No. w/ Outcomes:  {:<10} | Outcome:          {:<10}"
+        print(fmt.format(self.__outcomes_n__, self.outcome))
+        fmt = "Action:           {:<10} | Sample:           {:<10}"
+        print(fmt.format(self.action, self.sample))
+        fmt = "Outcome type:     {:<10} | Model:            {:<10}"
+        print(fmt.format(self.__outcome_type__, self._outcome_model_dist_))
+        fmt = "Alpha:            {:<10} | "
+        print(fmt.format(self.alpha))
+
     def summary(self):
         """Display summary results
 
@@ -548,16 +560,7 @@ class BridgePointEstimator:
         print("==============================================================")
         print("Estimator:       ", self.__estimator_label__)
         print("--------------------------------------------------------------")
-        fmt = "No. Observations: {:<10} | No. Input:        {:<10}"
-        print(fmt.format(self.__estimator_n__, self.__original_n__))
-        fmt = "No. w/ Outcomes:  {:<10} | Outcome:          {:<10}"
-        print(fmt.format(self.__outcomes_n__, self.outcome))
-        fmt = "Action:           {:<10} | Sample:           {:<10}"
-        print(fmt.format(self.action, self.sample))
-        fmt = "Outcome type:     {:<10} | Model:            {:<10}"
-        print(fmt.format(self.__outcome_type__, self._outcome_model_dist_))
-        fmt = "Alpha:            {:<10} | "
-        print(fmt.format(self.alpha))
+        self._summary_details_()
         print("--------------------------------------------------------------")
         print(table.round(decimals=self._decimals_))
         print("==============================================================")
@@ -697,5 +700,22 @@ class BridgePointEstimator:
         s1 = s[m == 1]
         resid = (y_hat - y_nan)[m == 1]
         descriptive_stats_r(study=s1, residual=resid, label=self.sample, decimals=3)
+        print("==============================================================")
+
+    def diagnostic_shared(self):
+        """
+
+        Returns
+        -------
+
+        """
+        print("==============================================================")
+        print("Shared Arm Diagnostic")
+        print("==============================================================")
+        self._summary_details_()
+        print("--------------------------------------------------------------")
+        table = self.results_table()
+        table = table.iloc[[2, 4, 5]]
+        print(table.round(decimals=self._decimals_))
         print("==============================================================")
 
