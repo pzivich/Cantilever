@@ -8,12 +8,72 @@ from cantilever.estimators.utils import print_nuisance_model_results
 
 
 class BridgeAIPW(BridgePointEstimator):
-    """Bridged comparison augmented inverse probability weighting (AIPW) estimator for point outcome data.
+    r"""Bridged comparison augmented inverse probability weighting (AIPW) estimator  for the mean or proportion.
 
-    Here, weighted regression AIPW is used.
+    Let :math:`Y^a` be the potential outcome under action :math:`a`, :math:`A \in \{0, 1, 2\}` be the action,
+    :math:`S \in \{0,1\}` be the population indicator, :math:`W` be a set of baseline covariates, and :math:`R=1` denote
+    the outcome being observed. The parameter of interest is the comparison between :math:`A=2` and :math:`A=0` in the
+    :math:`S=1` population, which can be expressed with the single-span and multi-span form:
 
+    .. math::
+
+        \psi_{SS} = E[Y^2 | S=1] - E[Y^0 | S=1] \\
+        \psi_{MS} = \left\{ E[Y^2 | S=1] - E[Y^1 | S=1] \right\} + \left\{ E[Y^1 | S=1] - E[Y^0 | S=1] \right\}
+
+
+    The bridge AIPW estimator computed both parameters (under the corresponding identification assumptions) using the
+    weighted-regression implementation of AIPW. First, inverse probability weights are estimated from models for the
+    action (:math:`\Pr(A=a \mid W,S=s)`), sampling (:math:`\Pr(S=1 \mid W)`), and missingness
+    (:math:`\Pr(R=1 \mid A,W,S=s)`). The inverse probability weights are defined as
+
+    .. math::
+
+        \omega_i = \frac{1}{\Pr(A=a \mid W_i, S_i; \alpha)}
+        \times \left[S_i + (1-S_i) \times \frac{\Pr(S=1 \mid W_i; \gamma)}{\Pr(S=0 \mid W_i; \gamma)} \right]
+        \times \frac{1}{\Pr(R=1 \mid A_i, W_i, S_i; \rho)}
+
+    These weights are then used to fit a weighted regression model for the outcome, :math:`E[Y \mid A,W,S,R=1]`. This
+    model is then used to generate predictions under the different actions for the target population, :math:`S=1`. The
+    AIPW estimator for :math:`A:=a` is defined as
+
+    .. math::
+
+        \hat{\mu}_{a,s} = \frac{\sum_{i=1}^{n} S_i \times  m_a(W, S=s; \hat{\beta})}{\sum_{i=1}^{n} S_i}
+
+    where :math:`m_a(W,S=s; \beta)` is the predicted value from the weighted outcome model fit using :math:`S=1` given
+    :math:`W` and :math:`A:=a`.
+
+    The multi-span expression indicates that :math:`E[Y^1 | S=1]` can be separately estimated using the :math:`S=1`
+    and :math:`S=0` data (i.e., :math:`\hat{\mu}_{1,1}` and :math:`\hat{\mu}_{1,0}`). Given the identification
+    assumptions are met, a difference of zero between these estimators is expected . A non-zero difference is
+    indicative of at least one assumption being violated. See the papers in the references for further details.
+
+    The variance for all parameters is estimated using the empirical sandwich variance estimator, which correctly
+    incorporates the uncertainty of the nuisance parameter estimates into the variance for the bridge parameters.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Pandas DataFrame object consisting of all variables of interest. Note all variables, besides the outcome, with
+        missing data will have their corresponding rows dropped (i.e., a baseline complete-case analysis is performed).
+    outcome : str
+        Column label for the outcome variable.
+    action : str
+        Column label for the exposure variable.
+    sample : str
+        Column label for the sample or study indicator variable.
+    alpha : float, optional
+        Alpha level to use for the confidence intervals.
+
+    Examples
+    --------
+    ...
+
+    References
+    ----------
+    Shook-Sa BE, Zivich PN, Rosin SP, Edwards JK, Adimora AA, Hudgens MG, Cole SR. (2023). Fusing Trial Data for
+    Treatment Comparisons: Single versus Multi-Span Bridging. *arXiv:2305.00845*.
     """
-
     def __init__(self, data, outcome, action, sample, alpha=0.05, verbose=True, decimals=2):
         # initialize the preceding class (this allows for more arguments in init than available in BaseMeanEstimator)
         super().__init__(data=data, outcome=outcome, action=action, sample=sample, alpha=alpha,
@@ -21,15 +81,19 @@ class BridgeAIPW(BridgePointEstimator):
         self.__estimator_label__ = "Augmented Inverse Probability Weighting"
 
     def estimate(self, init=None):
-        """
+        """Estimate the parameters of interest using bridge augmented inverse probability weighting estimator.
 
         Parameters
         ----------
-        init
+        init : None, list, ndarray, optional
+            Optional list of starting values for the root-finding procedure for: single-span, multi-span, diagnostic,
+            mean for A=2, mean for A=1 from S=1, mean for A=1 from S=0, mean for A=0. Therefore, the provided array
+            must consist of 7 values. If left as ``None`` (the default), starting values for the root-finding procedure
+            are automatically generated.
 
         Returns
         -------
-
+        None
         """
         y_nan, a, s, m = self._get_variable_arrays_()
         Xa2, Xa1, Xa0 = self._get_updated_design_matrices_()

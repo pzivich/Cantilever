@@ -7,7 +7,7 @@ from cantilever.estimators.point.efuncs import psi_bridge_point
 
 
 class BridgeGComputation(BridgePointEstimator):
-    r"""Bridged comparison g-computation estimator for point outcome data.
+    r"""Bridged comparison g-computation estimator for the mean or proportion.
 
     Let :math:`Y^a` be the potential outcome under action :math:`a`, :math:`A \in \{0, 1, 2\}` be the action,
     :math:`S \in \{0,1\}` be the population indicator, :math:`W` be a set of baseline covariates, and :math:`R=1` denote
@@ -20,7 +20,7 @@ class BridgeGComputation(BridgePointEstimator):
         \psi_{MS} = \left\{ E[Y^2 | S=1] - E[Y^1 | S=1] \right\} + \left\{ E[Y^1 | S=1] - E[Y^0 | S=1] \right\}
 
 
-    The bridge g-computation estimator computed both parameters (under the corresponding identification assumptions) by
+    The bridge g-computation estimator computes both parameters (under the corresponding identification assumptions) by
     fitting an outcome model for :math:`E[Y \mid A,W,S,R=1]`. This model is then used to generate predictions under the
     different actions for the target population, :math:`S=1`. The g-computation estimator for :math:`A:=a` is defined as
 
@@ -28,7 +28,7 @@ class BridgeGComputation(BridgePointEstimator):
 
         \hat{\mu}_{a,s} = \frac{\sum_{i=1}^{n} S_i \times  m_a(W, S=s; \hat{\beta})}{\sum_{i=1}^{n} S_i}
 
-    where :math:`m_a(W,S=s; \beta)` is the predicted value from outcome model fit using :math:`S=1` given :math:`W`
+    where :math:`m_a(W,S=s; \beta)` is the predicted value from the outcome model fit using :math:`S=1` given :math:`W`
     and :math:`A:=a`.
 
     Here, outcome models are fit stratified by :math:`S`. The multi-span expression indicates that :math:`E[Y^1 | S=1]`

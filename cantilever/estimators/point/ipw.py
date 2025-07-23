@@ -7,7 +7,7 @@ from cantilever.estimators.point.efuncs import psi_bridge_point
 
 
 class BridgeIPW(BridgePointEstimator):
-    r"""Bridged comparison inverse probability weighting (IPW) estimator for point outcome data.
+    r"""Bridged comparison inverse probability weighting (IPW) estimator for the mean or proportion.
 
     Let :math:`Y^a` be the potential outcome under action :math:`a`, :math:`A \in \{0, 1, 2\}` be the action,
     :math:`S \in \{0,1\}` be the population indicator, :math:`W` be a set of baseline covariates, and :math:`R=1` denote
@@ -20,7 +20,7 @@ class BridgeIPW(BridgePointEstimator):
         \psi_{MS} = \left\{ E[Y^2 | S=1] - E[Y^1 | S=1] \right\} + \left\{ E[Y^1 | S=1] - E[Y^0 | S=1] \right\}
 
 
-    The bridge IPW estimator computed both parameters (under the corresponding identification assumptions) by
+    The bridge IPW estimator computes both parameters (under the corresponding identification assumptions) by
     fitting models for the action (:math:`\Pr(A=a \mid W,S=s)`), sampling (:math:`\Pr(S=1 \mid W)`), and
     missingness (:math:`\Pr(R=1 \mid A,W,S=s)`). These models are then used to compute the inverse probability weights,
     which are defined as
