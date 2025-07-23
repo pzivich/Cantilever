@@ -12,7 +12,10 @@ from cantilever.estimators.utils import (fit_mestimator,
 
 
 class BridgePointEstimator:
-    """Parent or base class for the bridged comparisons mean recipes.
+    """Parent class for the bridged comparison point estimators.
+
+    This class provides the skeleton for the bridged estimators for the mean. Basic functions implemented include:
+    data processing, nuisance model estimators, background functionalities, diagnostic procedures, plotting.
 
     Parameters
     ----------
@@ -124,7 +127,18 @@ class BridgePointEstimator:
         self.tmle_results = None           # Storage for completed TMLE process
 
     def action_model(self, model, init=None, bounds=(0, 1)):
-        """
+        """Estimate the action nuisance model. This function takes the specified nuisance model for the action (e.g.,
+        exposure, treatment, intervention) and estimates the corresponding parameters using a logistic regression model.
+        This model is used to compute the propensity scores and inverse probability of treatment weights.
+
+        Note
+        ----
+        While one does not need to include covariates in this model with a marginally randomized trial, including strong
+        predictors of the outcome in this model may improve efficiency (i.e., produce narrower confidence intervals).
+
+
+        The propensity score is defined as :math:`\Pr(A=a|W,S)`. Here, the action nuisance model is independently
+        fit for each study sample.
 
         Parameters
         ----------
@@ -170,7 +184,12 @@ class BridgePointEstimator:
         self._action_coefs_ = estr.theta                 # Action nuisance model coefficients
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
-        """
+        """Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
+        estimates the corresponding parameters using a logistic regression model. This model is used to compute the
+        sample scores and inverse odds of sampling weights.
+
+        The sample score is defined as :math:`\Pr(S=1|W)`
+
 
         Parameters
         ----------
@@ -215,7 +234,11 @@ class BridgePointEstimator:
         self._sample_coefs_ = estr.theta                 # Sampling nuisance model coefficients
 
     def missing_model(self, model, init=None, bounds=(0, 1)):
-        """
+        """Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
+        estimates the corresponding parameters using a logistic regression model. This model is used to compute the
+        sample scores and inverse odds of sampling weights.
+
+        The missing score is defined as :math:`\Pr(R=1|A,W,S)`
 
         Parameters
         ----------
@@ -265,6 +288,9 @@ class BridgePointEstimator:
 
     def outcome_model(self, model, model_type='linear', init=None):
         """Outcome models with the same specifications are fit to either piece
+
+        The outcome model is defined as :math:`E(Y|A,W,S,R=1)`. Here, the outcome nuisance model is independently
+        fit for each study sample.
 
         Parameters
         ----------
@@ -318,7 +344,15 @@ class BridgePointEstimator:
         self._outcome_coefs_labels_ = labels           # Outcome nuisance model coefficient labels
         self._outcome_coefs_ = estr.theta              # Outcome nuisance model coefficients
 
+    # TODO add weighted outcome model that AIPW only calls?
+
     def _get_variable_arrays_(self):
+        """Internal function to
+
+        Returns
+        -------
+
+        """
         y = np.asarray((self.data[self.outcome]))
         y_nan = np.nan_to_num(y, copy=True, nan=-9999.)
         a = np.asarray((self.data[self.action]))
@@ -327,6 +361,13 @@ class BridgePointEstimator:
         return y_nan, a, s, m
 
     def _get_updated_design_matrices_(self):
+        """Internal function to compute the updated outcome model design matrices when the action is set to the
+        different levels.
+
+        Returns
+        -------
+        Three NumPy arrays, with A=2, A=1, A=0 respectively
+        """
         da = self.data.copy()
         # I can trick patsy here by ensuring coverage of 0,1,2 with the S=0 group (may be dangerous)
         da[self.action] = np.where(da[self.sample] == 1, 2, da[self.action])
@@ -339,6 +380,13 @@ class BridgePointEstimator:
 
     @staticmethod
     def _generate_inits_(init, n_params):
+        """Internal function to generate initial values
+
+        Returns
+        -------
+        list
+        """
+        # TODO I should make inits with 'smart' intercepts
         if init is None:
             init = [0., ] * n_params
         else:
@@ -346,9 +394,15 @@ class BridgePointEstimator:
                 raise ValueError("The length of the provided `init` does not match the number of parameters as "
                                  "determined by the estimating equations. There are " + str(n_params) + ", but "
                                  + str(len(init)) + " were given.")
-        return init
+        return list(init)
 
     def _fit_mestimator_(self, estimating_functions, init):
+        """Internal function to fit the corresponding M-estimator
+
+        Returns
+        -------
+        Optimized Delicatessen MEstimator class object
+        """
         fmestr = fit_mestimator(estimating_functions, init,         # Apply M-estimator procedure
                                 solver=self.solver,                 # ... what solver to use
                                 maxiter=self.maxiter,               # ... number of iterations allowed
@@ -359,6 +413,12 @@ class BridgePointEstimator:
         return fmestr
 
     def results_table(self):
+        """Generate a results table for the parameter of interest.
+
+        Returns
+        -------
+        pandas DataFrame
+        """
         if self.mestimator is None:
             raise ValueError("The estimation procedure must be completed before the results can be obtained. "
                              "Please check the order of the function calls in your code.")
@@ -466,13 +526,24 @@ class BridgePointEstimator:
         return nuisance_tables, nuisance_labels
 
     def _print_nuisance_fit_details_(self, n_obs, dep_var, family):
+        """Internal function to describe nuisance model specifications
+
+        Returns
+        -------
+        None
+        """
         fmt = "No. Observations:   {:<11} | Dependent Variable: {:<11}"
         print(fmt.format(n_obs, dep_var))
         fmt = "Model:              {:<11} | Method:             {:<11}"
         print(fmt.format(family, self.solver))
 
     def summary(self):
-        # TODO add self.alpha to the table. Also ensure that CI's are updated correctly
+        """Display summary results
+
+        Returns
+        -------
+        None
+        """
         table = self.results_table()
         print("==============================================================")
         print("Estimator:       ", self.__estimator_label__)
@@ -492,25 +563,26 @@ class BridgePointEstimator:
         print("==============================================================")
 
     def save_results(self, file):
-        r"""
+        """Save the results table as a CSV file
 
         Parameters
         ----------
-        file
+        file : str
+            File name (and path) to save the results to. Defaults to current sys path
 
         Returns
         -------
-
+        None
         """
         table = self.results_table()
         table.to_csv(file=file+".csv")
 
     def diagnostics_weights(self):
-        r"""
+        """
 
         Returns
         -------
-
+        None
         """
         if self._sample_coefs_ is None or self._action_coefs_ is None:
             raise ValueError("Nuisance models for weights must be specified prior to running the diagnostics...")
@@ -594,11 +666,11 @@ class BridgePointEstimator:
         # TODO other diagnostics: boxplot of scores, standardized mean differences
 
     def diagnostics_outcome(self):
-        r"""
+        """
 
         Returns
         -------
-
+        None
         """
         if self._outcome_coefs_ is None:
             raise ValueError("Outcome nuisance model must be specified prior to running the diagnostics...")

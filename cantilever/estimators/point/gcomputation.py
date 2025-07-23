@@ -7,36 +7,38 @@ from cantilever.estimators.point.efuncs import psi_bridge_point
 
 
 class BridgeGComputation(BridgePointEstimator):
-    """Bridged comparison g-computation estimator for point outcome data.
+    r"""Bridged comparison g-computation estimator for point outcome data.
 
-    Let :math:`Y^a` be the potential outcome under action :math:`a`, :math:`A \in \{0, 1, 2\}` be the action, and
-    :math:`S \in \{0,1\}` be the population indicator. Bridge g-computation operates by fitting outcomes models
-    stratified by :math:`S`. The outcome models are then used to generate predictions under the non-overlapping actions
-    between trials for the target population. Both the single-span and multi-span forms of the bridged comparison are
-    computed:
+    Let :math:`Y^a` be the potential outcome under action :math:`a`, :math:`A \in \{0, 1, 2\}` be the action,
+    :math:`S \in \{0,1\}` be the population indicator, :math:`W` be a set of baseline covariates, and :math:`R=1` denote
+    the outcome being observed. The parameter of interest is the comparison between :math:`A=2` and :math:`A=0` in the
+    :math:`S=1` population, which can be expressed with the single-span and multi-span form:
 
     .. math::
 
         \psi_{SS} = E[Y^2 | S=1] - E[Y^0 | S=1] \\
         \psi_{MS} = \left\{ E[Y^2 | S=1] - E[Y^1 | S=1] \right\} + \left\{ E[Y^1 | S=1] - E[Y^0 | S=1] \right\}
 
-    By stratifying outcome models by the study, a diagnostic procedure is enabled. Namely, one can compare the
-    predicted means for the shared action between studies from models fit to each study. The form of the diagnostic is
+
+    The bridge g-computation estimator computed both parameters (under the corresponding identification assumptions) by
+    fitting an outcome model for :math:`E[Y \mid A,W,S,R=1]`. This model is then used to generate predictions under the
+    different actions for the target population, :math:`S=1`. The g-computation estimator for :math:`A:=a` is defined as
 
     .. math::
 
-        \psi_{D} = E[Y^1 | S=1] - E[Y^1 | S=1]
+        \hat{\mu}_{a,s} = \frac{\sum_{i=1}^{n} S_i \times  m_a(W, S=s; \hat{\beta})}{\sum_{i=1}^{n} S_i}
 
-    where the first expectation is estimated using the outcome model fit using :math:`S=1` data, and the second is
-    estimated using the outcome model fit using :math:`S=0` data. A non-zero difference between the predicted means is
-    indicative of an assumption being violated for the fusion.
+    where :math:`m_a(W,S=s; \beta)` is the predicted value from outcome model fit using :math:`S=1` given :math:`W`
+    and :math:`A:=a`.
 
-    Note
-    ----
-    The variance is estimated using the empirical sandwich variance estimator (implemented via ``delicatessen``), which
-    incorporates the uncertainty of the nuisance parameter estimates correctly into the variance for the bridge
-    comparisons.
+    Here, outcome models are fit stratified by :math:`S`. The multi-span expression indicates that :math:`E[Y^1 | S=1]`
+    can be separately estimated using the :math:`S=1` and :math:`S=0` data (i.e., :math:`\hat{\mu}_{1,1}` and
+    :math:`\hat{\mu}_{1,0}`). Given the identification assumptions are met, a difference of zero between these
+    estimators is expected . A non-zero difference is indicative of at least one assumption being
+    violated. See the papers in the references for further details.
 
+    The variance for all parameters is estimated using the empirical sandwich variance estimator, which correctly
+    incorporates the uncertainty of the nuisance parameter estimates into the variance for the bridge parameters.
 
     Parameters
     ----------
@@ -54,6 +56,7 @@ class BridgeGComputation(BridgePointEstimator):
 
     Examples
     --------
+    ...
 
     References
     ----------
@@ -85,15 +88,19 @@ class BridgeGComputation(BridgePointEstimator):
                       UserWarning)
 
     def estimate(self, init=None):
-        """Estimate the bridged comparison.
+        """Estimate the parameters of interest using bridge g-computation.
 
         Parameters
         ----------
-        init
+        init : None, list, ndarray, optional
+            Optional list of starting values for the root-finding procedure for: single-span, multi-span, diagnostic,
+            mean for A=2, mean for A=1 from S=1, mean for A=1 from S=0, mean for A=0. Therefore, the provided array
+            must consist of 7 values. If left as ``None`` (the default), starting values for the root-finding procedure
+            are automatically generated.
 
         Returns
         -------
-
+        None
         """
         # Create variables into NumPy arrays for estimation procedure
         y_nan, a, s, m = self._get_variable_arrays_()
