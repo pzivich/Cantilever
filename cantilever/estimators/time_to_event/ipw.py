@@ -71,10 +71,10 @@ class BridgeIPW(BridgeTimeEstimator):
                                    product_limit=self._product_limit_)
 
             # Estimating weighted product limit
+            init_risk = self._generate_inits_risk_(s=samp, a=act)
             nuisance_inits = list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor
-            starting_vals = [0.01, ]*n_unique_times + nuisance_inits
-            estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
-            estr.estimate()
+            starting_vals = init_risk + nuisance_inits
+            estr = self._fit_mestimator_(psi, init=starting_vals, subset=list(range(n_unique_times)))
             est = estr.theta
             se = np.diag(estr.variance)**0.5
             ci = estr.confidence_intervals()
@@ -130,18 +130,16 @@ class BridgeIPW(BridgeTimeEstimator):
                                      unique_event_times=u_times,
                                      product_limit=self._product_limit_)
 
-        if self.risks is None:
-            starting_vals = ([0., ] + [0., ]*n_unique_times*3
-                             + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
-            subset_solve = list(range(n_unique_times*3 + 1))
-        else:
+        if self.risks is not None:
             starting_vals = (list(self.risks['R-A1S1'] - self.risks['R-A1S0'])
                              + list(self.risks['R-A1S1'])[1:] + list(self.risks['R-A1S0'])[1:]
                              + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
-            subset_solve = list(range(n_unique_times + 1))
+        else:
+            starting_vals = ([0., ] + [0., ]*n_unique_times*3
+                             + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
 
-        estr = MEstimator(psi_diagnostic, init=starting_vals, subset=subset_solve)
-        estr.estimate()
+        subset_solve = list(range(n_unique_times*3 + 1))
+        estr = self._fit_mestimator_(psi_diagnostic, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()
@@ -200,13 +198,12 @@ class BridgeIPW(BridgeTimeEstimator):
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*3 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(n_unique_times*3))
         else:
             starting_vals = ([0., ]*n_unique_times + list(self.risks['R-A2S1'])[1:] + list(self.risks['R-A0S0'])[1:]
                              + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(n_unique_times))
 
-        estr = MEstimator(psi_singlespan, init=starting_vals, subset=subset_solve)
+        subset_solve = list(range(n_unique_times))
+        estr = self._fit_mestimator_(psi_singlespan, init=starting_vals, subset=subset_solve)
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()
@@ -261,16 +258,14 @@ class BridgeIPW(BridgeTimeEstimator):
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*5 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(n_unique_times*5))
         else:
             starting_vals = ([0., ]*n_unique_times
                              + list(self.risks['R-A2S1'])[1:] + list(self.risks['R-A1S1'])[1:]
                              + list(self.risks['R-A1S0'])[1:] + list(self.risks['R-A0S0'])[1:]
                              + self._sample_coefs_ + self._action_coefs_ + starting_censor)
-            subset_solve = list(range(n_unique_times))
 
-        estr = MEstimator(psi_multispan, init=starting_vals, subset=subset_solve)
-        estr.estimate()
+        subset_solve = list(range(n_unique_times * 5))
+        estr = self._fit_mestimator_(psi_multispan, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()

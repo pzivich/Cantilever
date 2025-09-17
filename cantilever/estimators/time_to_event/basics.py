@@ -536,7 +536,7 @@ class BridgeTimeEstimator:
         risk = 1 - np.cumprod(1 - (n_events / n_risk_set))
         return list(risk)
 
-    def _fit_mestimator_(self, estimating_functions, init):
+    def _fit_mestimator_(self, estimating_functions, init, subset=None):
         """Internal function to fit the corresponding M-estimator
 
         Returns
@@ -549,7 +549,7 @@ class BridgeTimeEstimator:
                                 tolerance=self.tolerance,           # ... tolerance for the solution
                                 deriv_method=self.deriv_method,     # ... derivative method to use
                                 dx=self.dx,                         # ... derivative approximation space
-                                subset=None)                        # ... never subset parameters
+                                subset=subset)                      # ... never subset parameters
         return fmestr
 
     def _print_nuisance_fit_details_(self, n_obs, dep_var, family):
