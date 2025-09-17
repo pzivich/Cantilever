@@ -64,7 +64,8 @@ class BridgeGComputation(BridgeTimeEstimator):
                                      all_unique_times=self.all_unique_times)
 
             # Estimating pooled logistic model
-            starting_vals = [0.01, ]*n_unique_times + self._outcome_coefs_[i]
+            init_risk = self._generate_inits_risk_(s=samp, a=act)
+            starting_vals = init_risk + self._outcome_coefs_[i]
             estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
             estr.estimate()
             est = estr.theta
@@ -111,7 +112,11 @@ class BridgeGComputation(BridgeTimeEstimator):
                                        strata_s0_times=u_times0,
                                        all_unique_times=self.all_unique_times)
 
-        starting_vals = [0., ] + [0., ]*n_unique_times + self._outcome_coefs_[1] + self._outcome_coefs_[2]
+        if self.risks is not None:
+            starting_vals = (list(self.risks["R-A1S1"] - self.risks["R-A1S0"])
+                             + self._outcome_coefs_[1] + self._outcome_coefs_[2])
+        else:
+            starting_vals = [0., ] + [0., ]*n_unique_times + self._outcome_coefs_[1] + self._outcome_coefs_[2]
         estr = MEstimator(psi_diagnostic, init=starting_vals, subset=list(range(n_unique_times+1)))
         estr.estimate()
         est = estr.theta
@@ -163,8 +168,12 @@ class BridgeGComputation(BridgeTimeEstimator):
                                         strata_s0_times=u_times0,
                                         all_unique_times=self.all_unique_times)
 
-        start_vals = [0., ] * n_unique_times + self._outcome_coefs_[0] + self._outcome_coefs_[3]
-        estr = MEstimator(psi_single_span, init=start_vals, subset=list(range(n_unique_times)))
+        if self.risks is not None:
+            starting_vals = (list(self.risks["R-A2S1"] - self.risks["R-A0S0"])[1:]
+                             + self._outcome_coefs_[0] + self._outcome_coefs_[3])
+        else:
+            starting_vals = [0., ] * n_unique_times + self._outcome_coefs_[0] + self._outcome_coefs_[3]
+        estr = MEstimator(psi_single_span, init=starting_vals, subset=list(range(n_unique_times)))
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()
@@ -222,10 +231,16 @@ class BridgeGComputation(BridgeTimeEstimator):
                                        strata_s0_times=u_times0,
                                        all_unique_times=self.all_unique_times)
 
-        start_vals = ([0., ] * n_unique_times
-                      + self._outcome_coefs_[0] + self._outcome_coefs_[1]
-                      + self._outcome_coefs_[2] + self._outcome_coefs_[3])
-        estr = MEstimator(psi_multi_span, init=start_vals, subset=list(range(n_unique_times)))
+        if self.risks is not None:
+            starting_vals = (list((self.risks["R-A2S1"] - self.risks["R-A1S1"])
+                                  + (self.risks["R-A1S0"] - self.risks["R-A0S0"]))[1:]
+                             + self._outcome_coefs_[0] + self._outcome_coefs_[1]
+                             + self._outcome_coefs_[2] + self._outcome_coefs_[3])
+        else:
+            starting_vals = ([0., ] * n_unique_times
+                             + self._outcome_coefs_[0] + self._outcome_coefs_[1]
+                             + self._outcome_coefs_[2] + self._outcome_coefs_[3])
+        estr = MEstimator(psi_multi_span, init=starting_vals, subset=list(range(n_unique_times)))
         estr.estimate()
         est = estr.theta
         ci = estr.confidence_intervals()

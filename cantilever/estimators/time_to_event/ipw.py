@@ -71,7 +71,8 @@ class BridgeIPW(BridgeTimeEstimator):
                                    product_limit=self._product_limit_)
 
             # Estimating weighted product limit
-            starting_vals = [0.01, ]*n_unique_times + self._sample_coefs_ + self._action_coefs_ + starting_censor
+            nuisance_inits = list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor
+            starting_vals = [0.01, ]*n_unique_times + nuisance_inits
             estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
             estr.estimate()
             est = estr.theta
@@ -131,12 +132,12 @@ class BridgeIPW(BridgeTimeEstimator):
 
         if self.risks is None:
             starting_vals = ([0., ] + [0., ]*n_unique_times*3
-                             + self._sample_coefs_ + self._action_coefs_ + starting_censor)
+                             + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
             subset_solve = list(range(n_unique_times*3 + 1))
         else:
-            starting_vals = ([0., ] + [0., ]*n_unique_times
+            starting_vals = (list(self.risks['R-A1S1'] - self.risks['R-A1S0'])
                              + list(self.risks['R-A1S1'])[1:] + list(self.risks['R-A1S0'])[1:]
-                             + self._sample_coefs_ + self._action_coefs_ + starting_censor)
+                             + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
             subset_solve = list(range(n_unique_times + 1))
 
         estr = MEstimator(psi_diagnostic, init=starting_vals, subset=subset_solve)
@@ -195,7 +196,7 @@ class BridgeIPW(BridgeTimeEstimator):
                                       risk_set_matrix=r_matrix,
                                       unique_censor_times=u_c_times,
                                       unique_event_times=u_times,
-                                     product_limit=self._product_limit_)
+                                      product_limit=self._product_limit_)
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*3 + self._sample_coefs_ + self._action_coefs_ + starting_censor)

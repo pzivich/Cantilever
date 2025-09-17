@@ -3,12 +3,18 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from delicatessen import MEstimator
+from delicatessen.utilities import logit
+from delicatessen.estimating_equations import ee_regression
 
 from cantilever.formulas import get_design_matrix
 from cantilever.plotting import twister_plot
 from cantilever.estimators.time_to_event.efuncs import (ef_sample_logit,
                                                         ef_action_logit,
                                                         ef_pooled_logit)
+from cantilever.estimators.utils import (fit_mestimator,
+                                         compute_action_score, compute_sample_score, compute_missing_score,
+                                         descriptive_stats_w, descriptive_stats_r,
+                                         print_nuisance_model_results)
 
 
 class BridgeTimeEstimator:
@@ -110,7 +116,7 @@ class BridgeTimeEstimator:
 
         # M-estimator procedure details
         self.solver = 'lm'                 # Default solving method for root-finding
-        self.maxiter = 5000                # Default maximum iterations for root-finding
+        self.maxiter = 20000               # Default maximum iterations for root-finding
         self.tolerance = 1e-9              # Default tolerance for root-finding
         self.deriv_method = 'approx'       # Default differentiation method for sandwich
         self.dx = 1e-9                     # Default approximation distance for sandwich
@@ -126,76 +132,131 @@ class BridgeTimeEstimator:
         self.single_span = None
         self.multi_span = None
 
-    def sample_model(self, model, init=None, bounds=(0, 1)):
-        self._sample_nuisance_model_ = model
-        t, delta, a, s, c = self._get_variable_arrays_()
-        matrix, col_names = get_design_matrix(self._sample_nuisance_model_, self.data)
-        sample_matrix = np.asarray(matrix)
-        self._sample_design_matrix_ = sample_matrix
-
-        def psi(theta):
-            return ef_sample_logit(theta=theta,
-                                   s=s,
-                                   sample_matrix=sample_matrix)
-
-        starting_vals = [0., ]*sample_matrix.shape[1]
-        estr = MEstimator(psi, init=starting_vals)
-        estr.estimate()
-        self._sample_coefs_ = list(estr.theta)
-
     def action_model(self, model, init=None, bounds=(0, 1)):
         self._action_nuisance_model_ = model
         t, delta, a, s, c = self._get_variable_arrays_()
-        matrix, col_names = get_design_matrix(self._action_nuisance_model_, self.data)
-        action_matrix = np.asarray(matrix)
-        self._action_design_matrix_ = action_matrix
+        dm, labels = get_design_matrix(self._action_nuisance_model_, self.data)
+        n_params = dm.shape[1]
+
+        # Defining the estimating functions
+        def psi(theta):
+            return ef_action_logit(theta=theta, s=s, a=a,
+                                   action_matrix=dm)
+
+        # Solving the estiamting equations
+        init = self._generate_inits_(init=init, n_params=2*n_params)
+        estr = self._fit_mestimator_(estimating_functions=psi, init=init)
+
+        # Printing details to console based on verbose flag
+        if self._verbose_:
+            print("====================================================================")
+            print("Action Nuisance Model")
+            print("--------------------------------------------------------------------")
+            self._print_nuisance_fit_details_(n_obs=self.__estimator_n__,
+                                              dep_var=self.action,
+                                              family="logistic")
+            print("====================================================================")
+            print_nuisance_model_results(labels=["S=1 : " + l for l in labels] + ["S=0 : " + l for l in labels],
+                                         m_estimator=estr, decimals=self._decimals_)
+            print("====================================================================")
+
+        # Storing outcome model details
+        self._action_nuisance_model_ = model             # Action nuisance model specification
+        self._truncation_pract_ = bounds                 # Probability clip points for IPTW
+        self._action_design_matrix_ = dm                 # Action design matrix from model specification
+        self._action_coefs_labels_ = labels              # Action nuisance model coefficient labels
+        self._action_coefs_ = estr.theta                 # Action nuisance model coefficients
+
+    def sample_model(self, model, init=None, bounds=(0, 1)):
+        # Setting up data for the estimating functions
+        t, delta, a, s, c = self._get_variable_arrays_()
+        dm, labels = get_design_matrix(formula=model, data=self.data)
+        n_params = dm.shape[1]
 
         def psi(theta):
-            return ef_action_logit(theta=theta,
-                                   s=s,
-                                   a=a,
-                                   action_matrix=action_matrix)
+            return ef_sample_logit(theta=theta, s=s, sample_matrix=dm)
 
-        starting_vals = [0., ]*action_matrix.shape[1] + [0., ]*action_matrix.shape[1]
-        estr = MEstimator(psi, init=starting_vals)
-        estr.estimate()
-        self._action_coefs_ = list(estr.theta)
+        # Solving the estimating equations
+        init = self._generate_inits_(init=init, n_params=n_params)
+        estr = self._fit_mestimator_(estimating_functions=psi, init=init)
+
+        # Printing details to console based on verbose flag
+        if self._verbose_:
+            print("====================================================================")
+            print("Sampling Nuisance Model")
+            print("--------------------------------------------------------------------")
+            self._print_nuisance_fit_details_(n_obs=self.__estimator_n__,
+                                              dep_var=self.sample,
+                                              family="logistic")
+            print("====================================================================")
+            print_nuisance_model_results(labels=labels, m_estimator=estr, decimals=self._decimals_)
+            print("====================================================================")
+
+        # Storing outcome model details
+        self._sample_nuisance_model_ = model             # Sampling nuisance model specification
+        self._truncation_prsamp_ = bounds                # Probability clip points for IOSW
+        self._sample_design_matrix_ = dm                 # Sampling design matrix from model specification
+        self._sample_coefs_labels_ = labels              # Sampling nuisance model coefficient labels
+        self._sample_coefs_ = estr.theta                 # Sampling nuisance model coefficients
 
     def censor_model(self, model, init=None, bounds=(0, 1)):
-        self._censor_nuisance_model_ = model
+        # Setting up data for the estimating functions
+        model = model + " - 1"
         t, delta, a, s, c = self._get_variable_arrays_()
-        matrix, col_names = get_design_matrix(self._censor_nuisance_model_, self.data)
-        censor_matrix = np.asarray(matrix)
-        censor_n_params = censor_matrix.shape[1]
-        self._censor_design_matrix_ = censor_matrix
+        dm, labels = get_design_matrix(model, self.data)
+        dm = np.asarray(dm)
+        n_bcovs = dm.shape[1]
 
         # Fitting a series of pooled logistic models
         self._censor_coefs_ = []
         for samp in [1, 0]:
             t_matrix, f_matrix, r_matrix, u_times = self._get_censor_matrices_(t=t, c=c, sample=samp)
-            time_n_params = t_matrix.shape[1]
+            n_t_steps = t_matrix.shape[1]
 
             def psi(theta):
                 return ef_pooled_logit(theta=theta,
                                        delta=c,
-                                       baseline_matrix=censor_matrix,
+                                       baseline_matrix=dm,
                                        time_matrix=t_matrix,
                                        final_time_matrix=f_matrix,
                                        risk_set_matrix=r_matrix,
                                        contribute=(s == samp))
 
-            # Estimating pooled logistic model
-            starting_vals = [0., ]*censor_n_params + [-4., ] + [0., ]*(time_n_params - 1)
-            estr = MEstimator(psi, init=starting_vals)
-            estr.estimate(maxiter=20000)
+            # Solving the estimating equations
+            init = self._generate_inits_plr_(n_covs=n_bcovs, event=self.censor, s=samp)
+            estr = self._fit_mestimator_(psi, init=init)
+
+            # Printing details to console based on verbose flag
+            if self._verbose_:
+                print("====================================================================")
+                print("Censoring Nuisance Model: S=" + str(samp))
+                print("--------------------------------------------------------------------")
+                self._print_nuisance_fit_details_(n_obs=self.data.loc[self.data[self.sample] == samp].shape[0],
+                                                  dep_var=self.censor,
+                                                  family="plogit")
+                print("--------------------------------------------------------------------")
+                print("* Only coefficients for baseline covariates are shown")
+                print("====================================================================")
+                print_nuisance_model_results(labels=list(labels) + ["_", ]*n_t_steps,
+                                             m_estimator=estr, decimals=self._decimals_,
+                                             subset=n_bcovs)
+                print("====================================================================")
+
+            # Storing coefficients for later fitting
             self._censor_coefs_.append(list(estr.theta))
 
+        # Storing censoring model details
+        self._censor_nuisance_model_ = model      # Censor nuisance model specification
+        self._censor_design_matrix_ = dm          # Censor design matrix from model specification
+        self._censor_coefs_labels_ = labels       # Censor nuisance model coefficient labels
+
     def outcome_model(self, model):
-        self._outcome_nuisance_model_ = model
+        # Setting up data for the estimating functions
+        model = model + " - 1"
         t, delta, a, s, c = self._get_variable_arrays_()
-        matrix, col_names = get_design_matrix(self._outcome_nuisance_model_, self.data)
-        baseline_matrix = np.asarray(matrix)
-        baseline_n_params = baseline_matrix.shape[1]
+        dm, labels = get_design_matrix(model, self.data)
+        dm = np.asarray(dm)
+        n_bcovs = dm.shape[1]
 
         # Fitting a series of pooled logistic models
         self._outcome_coefs_ = []
@@ -204,22 +265,43 @@ class BridgeTimeEstimator:
             samp = act_samp_combo[1]
 
             t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=act, sample=samp)
-            time_n_params = t_matrix.shape[1]
+            n_t_steps = t_matrix.shape[1]
 
             def psi(theta):
                 return ef_pooled_logit(theta=theta,
                                        delta=delta,
-                                       baseline_matrix=baseline_matrix,
+                                       baseline_matrix=dm,
                                        time_matrix=t_matrix,
                                        final_time_matrix=f_matrix,
                                        risk_set_matrix=r_matrix,
                                        contribute=(a == act) & (s == samp))
 
-            # Estimating pooled logistic model
-            starting_vals = [0., ] * baseline_n_params + [-4., ] + [0., ] * (time_n_params - 1)
-            estr = MEstimator(psi, init=starting_vals)
-            estr.estimate()
+            # Solving the estimating equations
+            init = self._generate_inits_plr_(n_covs=n_bcovs, event=self.censor, s=samp)
+            estr = self._fit_mestimator_(psi, init=init)
+
+            # Printing details to console based on verbose flag
+            if self._verbose_:
+                print("====================================================================")
+                print("Outcome Nuisance Model: S=" + str(samp) + ", A="+str(act))
+                print("--------------------------------------------------------------------")
+                n_size = self.data.loc[(self.data[self.sample] == samp) & (self.data[self.action] == act)].shape[0]
+                self._print_nuisance_fit_details_(n_obs=n_size, dep_var=self.delta, family="plogit")
+                print("--------------------------------------------------------------------")
+                print("* Only coefficients for baseline covariates are shown")
+                print("====================================================================")
+                print_nuisance_model_results(labels=list(labels) + ["_", ] * n_t_steps,
+                                             m_estimator=estr, decimals=self._decimals_,
+                                             subset=n_bcovs)
+                print("====================================================================")
+
+            # Storing coefficients for later fitting
             self._outcome_coefs_.append(list(estr.theta))
+
+        # Storing censoring model details
+        self._outcome_nuisance_model_ = model      # Censor nuisance model specification
+        self._outcome_design_matrix_ = dm          # Censor design matrix from model specification
+        self._outcome_coefs_labels_ = labels       # Censor nuisance model coefficient labels
 
     def estimate_risks(self):
         pass
@@ -372,15 +454,111 @@ class BridgeTimeEstimator:
         return time_design_matrix, r_star_matrix, r_matrix, unique_times
 
     def _get_censor_matrices_(self, t, c, sample):
-        unique_times = list(np.unique(self.data.loc[(c == 1) & (self.data[self.sample] == sample),
-                                                    self.time]))
-        unique_times = np.asarray(unique_times)
+        unique_censor_times = list(np.unique(self.data.loc[(c == 1) & (self.data[self.sample] == sample), self.time]))
+        unique_censor_times = np.asarray(unique_censor_times)
 
         # Creating design matrices
-        time_design_matrix = np.identity(n=len(unique_times))
-        time_design_matrix[:, 0] = 1
+        ltfu_design_matrix = np.identity(n=len(unique_censor_times))
+        ltfu_design_matrix[:, 0] = 1
 
         # Creating other arrays
-        r_matrix = (t >= unique_times[:, None]).astype(int)
-        r_star_matrix = (t == unique_times[:, None]).astype(int)
-        return time_design_matrix, r_star_matrix, r_matrix, unique_times
+        r_matrix = (t >= unique_censor_times[:, None]).astype(int)
+        r_star_matrix = (t == unique_censor_times[:, None]).astype(int)
+        r_matrix = r_matrix - (1-c)*r_star_matrix
+
+        return ltfu_design_matrix, r_star_matrix, r_matrix, unique_censor_times
+
+    @staticmethod
+    def _generate_inits_(init, n_params):
+        """Internal function to generate initial values
+
+        Returns
+        -------
+        list
+        """
+        # TODO I should make inits with 'smart' intercepts
+        if init is None:
+            init = [0., ] * n_params
+        else:
+            if len(init) != n_params:
+                raise ValueError("The length of the provided `init` does not match the number of parameters as "
+                                 "determined by the estimating equations. There are " + str(n_params) + ", but "
+                                 + str(len(init)) + " were given.")
+        return list(init)
+
+    def _generate_inits_plr_(self, n_covs, event, s, a=None):
+        # Subset the data
+        if a is None:
+            ds = self.data.loc[self.data[self.sample] == s].copy()
+        else:
+            ds = self.data.loc[(self.data[self.sample] == s) & (self.data[self.action] == a)].copy()
+
+        # Initial setup of variables
+        d = np.asarray(ds[event])
+        t = np.asarray(ds[self.time])
+
+        # Getting unique times for the input event
+        unique_times = list(np.unique(ds.loc[d == 1, self.time]))
+        unique_times = np.asarray(unique_times)
+
+        # Matrix of those in risk set by time interval
+        risk_set_matrix = t[:, None] >= unique_times
+        n_risk_set = np.sum(risk_set_matrix, axis=0)
+        event_matrix = (t[:, None] == unique_times) * d[:, None]
+        n_events = np.sum(event_matrix, axis=0)
+
+        # Calculating the probability for each interval
+        pr = n_events / n_risk_set
+        pr = logit(pr)
+        pr = pr - np.asarray([0., ] + [pr[0], ] * (len(pr) - 1))
+
+        # Returning list of pre-set starting values
+
+        return [0., ]*n_covs + list(pr)
+
+    def _generate_inits_risk_(self, s, a):
+        # Getting unique times for the input event
+        unique_times = list(np.unique(self.data.loc[self.data[self.delta] == 1, self.time]))
+        unique_times = np.asarray(unique_times)
+
+        # Subset the data
+        ds = self.data.loc[(self.data[self.sample] == s) & (self.data[self.action] == a)].copy()
+        d = np.asarray(ds[self.delta])
+        t = np.asarray(ds[self.time])
+
+        # Matrix of those in risk set by time interval
+        risk_set_matrix = t[:, None] >= unique_times
+        n_risk_set = np.sum(risk_set_matrix, axis=0)
+        event_matrix = (t[:, None] == unique_times) * d[:, None]
+        n_events = np.sum(event_matrix, axis=0)
+
+        risk = 1 - np.cumprod(1 - (n_events / n_risk_set))
+        return list(risk)
+
+    def _fit_mestimator_(self, estimating_functions, init):
+        """Internal function to fit the corresponding M-estimator
+
+        Returns
+        -------
+        Optimized Delicatessen MEstimator class object
+        """
+        fmestr = fit_mestimator(estimating_functions, init,         # Apply M-estimator procedure
+                                solver=self.solver,                 # ... what solver to use
+                                maxiter=self.maxiter,               # ... number of iterations allowed
+                                tolerance=self.tolerance,           # ... tolerance for the solution
+                                deriv_method=self.deriv_method,     # ... derivative method to use
+                                dx=self.dx,                         # ... derivative approximation space
+                                subset=None)                        # ... never subset parameters
+        return fmestr
+
+    def _print_nuisance_fit_details_(self, n_obs, dep_var, family):
+        """Internal function to describe nuisance model specifications
+
+        Returns
+        -------
+        None
+        """
+        fmt = "No. Observations:   {:<11} | Dependent Variable: {:<11}"
+        print(fmt.format(n_obs, dep_var))
+        fmt = "Model:              {:<11} | Method:             {:<11}"
+        print(fmt.format(family, self.solver))
