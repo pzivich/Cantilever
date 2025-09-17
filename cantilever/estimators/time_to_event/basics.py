@@ -511,9 +511,10 @@ class BridgeTimeEstimator:
         pr = n_events / n_risk_set
         pr = logit(pr)
         pr = pr - np.asarray([0., ] + [pr[0], ] * (len(pr) - 1))
+        if pr[0] <= -5:                   # Bounding the intercept so it's not too low
+            pr[0] = -4.6                  # ... expit(-4.6) ~ 0.01
 
         # Returning list of pre-set starting values
-
         return [0., ]*n_covs + list(pr)
 
     def _generate_inits_risk_(self, s, a):
