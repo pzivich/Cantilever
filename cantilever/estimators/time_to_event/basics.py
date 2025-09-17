@@ -277,7 +277,7 @@ class BridgeTimeEstimator:
                                        contribute=(a == act) & (s == samp))
 
             # Solving the estimating equations
-            init = self._generate_inits_plr_(n_covs=n_bcovs, event=self.censor, s=samp)
+            init = self._generate_inits_plr_(n_covs=n_bcovs, event=self.delta, s=samp, a=act)
             estr = self._fit_mestimator_(psi, init=init)
 
             # Printing details to console based on verbose flag
