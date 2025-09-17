@@ -75,6 +75,6 @@ def print_nuisance_model_results(labels, m_estimator, decimals=3, subset=None):
     r['UCL'] = conf_int[:, 1]
     r = r.set_index("_")
     if subset is not None:
-        r = r.iloc[subset].copy()
+        r = r.iloc[:subset].copy()
     print(r.round(decimals))
 
