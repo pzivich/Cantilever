@@ -50,7 +50,6 @@ class BridgeGComputation(BridgeTimeEstimator):
             act = act_samp_combo[0]
             samp = act_samp_combo[1]
             t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=act, sample=samp)
-            # TODO add weights
 
             def psi(theta):
                 return ef_risk_gcomp(theta=theta,
@@ -66,8 +65,8 @@ class BridgeGComputation(BridgeTimeEstimator):
             # Estimating pooled logistic model
             init_risk = self._generate_inits_risk_(s=samp, a=act)
             starting_vals = init_risk + self._outcome_coefs_[i]
-            estr = MEstimator(psi, init=starting_vals, subset=list(range(n_unique_times)))
-            estr.estimate()
+            subset_solve = list(range(n_unique_times))
+            estr = self._fit_mestimator_(psi, init=starting_vals, subset=subset_solve)
             est = estr.theta
             ci = estr.confidence_intervals()
 
@@ -117,8 +116,9 @@ class BridgeGComputation(BridgeTimeEstimator):
                              + self._outcome_coefs_[1] + self._outcome_coefs_[2])
         else:
             starting_vals = [0., ] + [0., ]*n_unique_times + self._outcome_coefs_[1] + self._outcome_coefs_[2]
-        estr = MEstimator(psi_diagnostic, init=starting_vals, subset=list(range(n_unique_times+1)))
-        estr.estimate()
+
+        subset_solve = list(range(n_unique_times+1))
+        estr = self._fit_mestimator_(psi_diagnostic, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()
@@ -173,8 +173,9 @@ class BridgeGComputation(BridgeTimeEstimator):
                              + self._outcome_coefs_[0] + self._outcome_coefs_[3])
         else:
             starting_vals = [0., ] * n_unique_times + self._outcome_coefs_[0] + self._outcome_coefs_[3]
-        estr = MEstimator(psi_single_span, init=starting_vals, subset=list(range(n_unique_times)))
-        estr.estimate()
+
+        subset_solve = list(range(n_unique_times))
+        estr = self._fit_mestimator_(psi_single_span, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()
@@ -240,8 +241,9 @@ class BridgeGComputation(BridgeTimeEstimator):
             starting_vals = ([0., ] * n_unique_times
                              + self._outcome_coefs_[0] + self._outcome_coefs_[1]
                              + self._outcome_coefs_[2] + self._outcome_coefs_[3])
-        estr = MEstimator(psi_multi_span, init=starting_vals, subset=list(range(n_unique_times)))
-        estr.estimate()
+
+        subset_solve = list(range(n_unique_times))
+        estr = self._fit_mestimator_(psi_multi_span, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
         pval = estr.p_values()

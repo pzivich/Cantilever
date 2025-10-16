@@ -134,11 +134,14 @@ class BridgeIPW(BridgeTimeEstimator):
             starting_vals = (list(self.risks['R-A1S1'] - self.risks['R-A1S0'])
                              + list(self.risks['R-A1S1'])[1:] + list(self.risks['R-A1S0'])[1:]
                              + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
+            subset_solve = list(range(n_unique_times*3 + 1))
+            # TODO can I modify this to reduce what we are searching over?
         else:
             starting_vals = ([0., ] + [0., ]*n_unique_times*3
                              + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
+            subset_solve = list(range(n_unique_times*3 + 1))
 
-        subset_solve = list(range(n_unique_times*3 + 1))
+        # subset_solve = list(range(n_unique_times*3 + 1))
         estr = self._fit_mestimator_(psi_diagnostic, init=starting_vals, subset=subset_solve)
         est = estr.theta
         ci = estr.confidence_intervals()
