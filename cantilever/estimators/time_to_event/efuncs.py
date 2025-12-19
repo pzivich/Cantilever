@@ -528,3 +528,44 @@ def ef_multi_span_gcomp(theta, delta, baseline_matrix, sample,
     ee_rd = sample*((risk3 - risk2) + (risk1 - risk0)) - np.asarray(alpha)[:, None]
     # Returning stacked estimating equations
     return np.vstack([ee_rd, ee_plogit3, ee_plogit2, ee_plogit1, ee_plogit0])
+
+
+def ef_risk_aipw(theta, delta, s, a, c,
+                 baseline_matrix, time_matrix, final_time_matrix, risk_set_matrix, contribute,
+                 sample_matrix, action_matrix, censor_matrix,
+                 strata_unique_times, all_unique_times):
+    n_unique_times = len(all_unique_times)
+    alpha = theta[:n_unique_times]
+    beta = theta[n_unique_times:]
+    # TODO gamma = theta[]
+
+    # IPW model
+    ef_weight_models(theta, s=s, a=a, c=c,
+                     sample_matrix=sample_matrix, action_matrix=action_matrix, censor_matrix=None,
+                     time_matrix_s1=None, final_time_matrix_s1=None, risk_set_matrix_s1=None,
+                     time_matrix_s0=None, final_time_matrix_s0=None, risk_set_matrix_s0=None)
+    # ipw = construct_weights(theta=beta_all, s=s, a=a,
+    #                         sample_matrix=sample_matrix, action_matrix=action_matrix, censor_matrix=censor_matrix,
+    #                         time_matrix_s1=time_matrix_s1, strata_s1_times=strata_s1_times,
+    #                         time_matrix_s0=time_matrix_s0, strata_s0_times=strata_s0_times,
+    #                         unique_censor_times=unique_censor_times,
+    #                         unique_event_times=unique_event_times)
+
+    # Pooled logistic estimation
+    ee_plogit = ef_pooled_logit(theta=beta,
+                                delta=delta,
+                                baseline_matrix=baseline_matrix,
+                                time_matrix=time_matrix,
+                                final_time_matrix=final_time_matrix,
+                                risk_set_matrix=risk_set_matrix,
+                                contribute=contribute)
+    # Risk function estimation
+    risks = plogit_predictions(theta=beta,
+                               baseline_matrix=baseline_matrix,
+                               time_matrix=time_matrix,
+                               strata_unique_times=strata_unique_times,
+                               all_unique_times=all_unique_times)
+    ee_risks = risks - np.asarray(alpha)[:, None]
+
+    # Returning stacked estimating equations
+    return np.vstack([ee_risks, ee_plogit])

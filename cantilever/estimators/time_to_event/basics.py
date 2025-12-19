@@ -143,7 +143,7 @@ class BridgeTimeEstimator:
             return ef_action_logit(theta=theta, s=s, a=a,
                                    action_matrix=dm)
 
-        # Solving the estiamting equations
+        # Solving the estimating equations
         init = self._generate_inits_(init=init, n_params=2*n_params)
         estr = self._fit_mestimator_(estimating_functions=psi, init=init)
 
@@ -165,7 +165,7 @@ class BridgeTimeEstimator:
         self._truncation_pract_ = bounds                 # Probability clip points for IPTW
         self._action_design_matrix_ = dm                 # Action design matrix from model specification
         self._action_coefs_labels_ = labels              # Action nuisance model coefficient labels
-        self._action_coefs_ = estr.theta                 # Action nuisance model coefficients
+        self._action_coefs_ = list(estr.theta)           # Action nuisance model coefficients
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
         # Setting up data for the estimating functions
@@ -197,7 +197,7 @@ class BridgeTimeEstimator:
         self._truncation_prsamp_ = bounds                # Probability clip points for IOSW
         self._sample_design_matrix_ = dm                 # Sampling design matrix from model specification
         self._sample_coefs_labels_ = labels              # Sampling nuisance model coefficient labels
-        self._sample_coefs_ = estr.theta                 # Sampling nuisance model coefficients
+        self._sample_coefs_ = list(estr.theta)           # Sampling nuisance model coefficients
 
     def censor_model(self, model, init=None, bounds=(0, 1)):
         # Setting up data for the estimating functions

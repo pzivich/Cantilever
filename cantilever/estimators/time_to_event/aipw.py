@@ -20,3 +20,12 @@ class BridgeAIPW(BridgeTimeEstimator):
 
         # Updating specific parameters for g-computation
         self.__estimator_label__ = "Augmented Inverse Probability Weighting"
+
+    def estimate_risks(self):
+        if self._sample_nuisance_model_ is None:
+            raise ValueError("The function sample_model() must be called prior to estimating the risks")
+        if self._action_nuisance_model_ is None:
+            raise ValueError("The function action_model() must be called prior to estimating the risks")
+        if self._outcome_nuisance_model_ is None:
+            raise ValueError("The function outcome_model() must be called prior to estimating the risks")
+
