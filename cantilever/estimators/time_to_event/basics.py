@@ -165,7 +165,7 @@ class BridgeTimeEstimator:
         self._truncation_pract_ = bounds                 # Probability clip points for IPTW
         self._action_design_matrix_ = dm                 # Action design matrix from model specification
         self._action_coefs_labels_ = labels              # Action nuisance model coefficient labels
-        self._action_coefs_ = estr.theta                 # Action nuisance model coefficients
+        self._action_coefs_ = list(estr.theta)           # Action nuisance model coefficients
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
         # Setting up data for the estimating functions
@@ -197,7 +197,7 @@ class BridgeTimeEstimator:
         self._truncation_prsamp_ = bounds                # Probability clip points for IOSW
         self._sample_design_matrix_ = dm                 # Sampling design matrix from model specification
         self._sample_coefs_labels_ = labels              # Sampling nuisance model coefficient labels
-        self._sample_coefs_ = estr.theta                 # Sampling nuisance model coefficients
+        self._sample_coefs_ = list(estr.theta)           # Sampling nuisance model coefficients
 
     def censor_model(self, model, init=None, bounds=(0, 1)):
         # Setting up data for the estimating functions
@@ -534,7 +534,7 @@ class BridgeTimeEstimator:
         n_events = np.sum(event_matrix, axis=0)
 
         risk = 1 - np.cumprod(1 - (n_events / n_risk_set))
-        return list(risk)
+        return list(np.nan_to_num(risk, nan=1))
 
     def _fit_mestimator_(self, estimating_functions, init, subset=None):
         """Internal function to fit the corresponding M-estimator

@@ -12,7 +12,7 @@ def align_ipcw_with_event_times(event_time_vector, censor_time_vector, censor_we
     ipcw = np.ones((censor_weights.shape[0], dt_vector.shape[0]))
     for i in range(len(dt_vector)):
         dt = dt_vector[i]
-        if dt < ct_vector[0]:
+        if dt <= ct_vector[0]:  # Equal sign here applies the lagging of the weights
             pass
         else:
             j = np.searchsorted(ct_vector, dt, side='left')
@@ -86,7 +86,7 @@ def horvitz_thompson_predict(delta, final_time_matrix, contributions, full_weigh
 def construct_iosw(theta, s, sample_matrix):
     # Constructing the inverse odds of sampling weights
     pr_s = inverse_logit(np.dot(sample_matrix, theta))
-    iosw = s + ((1 - s) * (1 - pr_s) / pr_s)
+    iosw = s + ((1 - s) * pr_s / (1 - pr_s))
     return iosw
 
 
@@ -110,17 +110,16 @@ def construct_ipcw(theta, s, censor_matrix, time_matrix_s1, strata_s1_times, tim
     pr_c1 = 1 - plogit_predictions(theta=phi1, baseline_matrix=censor_matrix, time_matrix=time_matrix_s1,
                                    strata_unique_times=strata_s1_times, all_unique_times=unique_censor_times)
     pr_c1 = np.vstack([np.ones(pr_c1.shape[1]), pr_c1])     # Adding rows of 1 as initial weights
-    pr_c1 = pr_c1[:-1, :]                                   # Lagging step (dropping last row)
     pr_c0 = 1 - plogit_predictions(theta=phi0, baseline_matrix=censor_matrix, time_matrix=time_matrix_s0,
                                    strata_unique_times=strata_s0_times, all_unique_times=unique_censor_times)
     pr_c0 = np.vstack([np.ones(pr_c0.shape[1]), pr_c0])     # Adding rows of 1 as initial weights
-    pr_c0 = pr_c0[:-1, :]                                   # Lagging step (dropping last row)
 
     # Constructing the weights
     ipcw = 1 / (pr_c1 * s + pr_c0 * (1 - s))
 
     # Aligning censor weights with event times
-    ipcw = align_ipcw_with_event_times(event_time_vector=unique_event_times, censor_time_vector=unique_censor_times,
+    ipcw = align_ipcw_with_event_times(event_time_vector=unique_event_times,
+                                       censor_time_vector=[0., ] + list(unique_censor_times),
                                        censor_weights=ipcw)
     return ipcw
 

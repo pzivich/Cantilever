@@ -68,6 +68,11 @@ def ef_product_limit(theta, delta, final_time_matrix, risk_set_matrix, contribut
     if weights is not None:
         ee_risk = ee_risk * weights
 
+    # Holding risk as fixed for all points after observation
+    empty_risk_set_indicator = np.sum(risk_set_matrix * contributions, axis=1) == 0
+    constant = (np.ones(risk_set_matrix.shape).T * empty_risk_set_indicator * (theta - theta_s)).T
+    ee_risk = ee_risk + constant
+
     # Returning the stacked estimating equations
     return ee_risk * contributions
 
@@ -180,10 +185,12 @@ def ef_diagnostic_ipw(theta, s, a, c,
 
     # Diagnostic risk function estimation
     ee_diag = ((risk1 - risk0) - np.asarray(risk_diagnostic))[:, None] * np.ones(obs_n)
+
     # Integrated risk difference
-    unique_times = np.asarray(unique_event_times)
-    time_scale = np.append(unique_times[1:], unique_times[-1]) - unique_times
+    unique_times = np.append([0., ], np.asarray(unique_event_times))
+    time_scale = unique_times[1:] - unique_times[:-1]
     ee_ird = (ird - np.sum(risk_diagnostic * time_scale)) * np.ones(obs_n)
+
     # Returning stacked estimating equations
     return np.vstack([ee_ird, ee_diag, ee_risk1, ee_risk0, ee_weights])
 

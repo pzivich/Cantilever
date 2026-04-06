@@ -13,14 +13,13 @@ class BridgeIPW(BridgeTimeEstimator):
     r"""IPW bridge algorithm
 
     """
-    def __init__(self, data, time, delta, action, sample, censor=None, hajek=True, alpha=0.05,
+    def __init__(self, data, time, delta, action, sample, censor=None, alpha=0.05,
                  verbose=True, decimals=2):
         # initialize the preceding class (allows for more arguments in init than BaseEstimator)
         super().__init__(data=data, time=time, delta=delta, action=action, sample=sample, censor=censor,
                          alpha=alpha, verbose=verbose, decimals=decimals)
 
         # Updating specific parameters for g-computation
-        self._product_limit_ = hajek
         self.__estimator_label__ = "Inverse Probability Weighting"
 
     def outcome_model(self, model):
@@ -68,7 +67,7 @@ class BridgeIPW(BridgeTimeEstimator):
                                    contribute_s=(s == samp),
                                    unique_censor_times=u_c_times,
                                    unique_event_times=u_times,
-                                   product_limit=self._product_limit_)
+                                   product_limit=True)
 
             # Estimating weighted product limit
             init_risk = self._generate_inits_risk_(s=samp, a=act)
@@ -97,7 +96,6 @@ class BridgeIPW(BridgeTimeEstimator):
 
     def estimate_diagnostic(self):
         t, delta, a, s, c = self._get_variable_arrays_()
-        # TODO need to add 0, max_t to _get_time_matrices_ for the diagnostic, so IRD is correct
         t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
         n_unique_times = len(u_times)
         if self._censor_design_matrix_ is None:
@@ -128,7 +126,7 @@ class BridgeIPW(BridgeTimeEstimator):
                                      risk_set_matrix=r_matrix,
                                      unique_censor_times=u_c_times,
                                      unique_event_times=u_times,
-                                     product_limit=self._product_limit_)
+                                     product_limit=True)
 
         if self.risks is not None:
             starting_vals = (list(self.risks['R-A1S1'] - self.risks['R-A1S0'])
@@ -197,10 +195,11 @@ class BridgeIPW(BridgeTimeEstimator):
                                       risk_set_matrix=r_matrix,
                                       unique_censor_times=u_c_times,
                                       unique_event_times=u_times,
-                                      product_limit=self._product_limit_)
+                                      product_limit=True)
 
         if self.risks is None:
-            starting_vals = ([0., ]*n_unique_times*3 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
+            starting_vals = ([0., ]*n_unique_times + [0.5, ]*n_unique_times*2
+                             + self._sample_coefs_ + self._action_coefs_ + starting_censor)
         else:
             starting_vals = ([0., ]*n_unique_times + list(self.risks['R-A2S1'])[1:] + list(self.risks['R-A0S0'])[1:]
                              + self._sample_coefs_ + self._action_coefs_ + starting_censor)
@@ -257,7 +256,7 @@ class BridgeIPW(BridgeTimeEstimator):
                                      risk_set_matrix=r_matrix,
                                      unique_censor_times=u_c_times,
                                      unique_event_times=u_times,
-                                     product_limit=self._product_limit_)
+                                     product_limit=True)
 
         if self.risks is None:
             starting_vals = ([0., ]*n_unique_times*5 + self._sample_coefs_ + self._action_coefs_ + starting_censor)
