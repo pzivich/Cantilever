@@ -27,6 +27,11 @@ class BridgeIPW(BridgeTimeEstimator):
                       UserWarning)
 
     def estimate_risks(self):
+        if self._sample_nuisance_model_ is None:
+            raise ValueError("The function sample_model() must be called prior to estimating the risks")
+        if self._action_nuisance_model_ is None:
+            raise ValueError("The function action_model() must be called prior to estimating the risks")
+
         t, delta, a, s, c = self._get_variable_arrays_()
         t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
         n_unique_times = len(self.all_unique_times)
@@ -71,7 +76,7 @@ class BridgeIPW(BridgeTimeEstimator):
 
             # Estimating weighted product limit
             init_risk = self._generate_inits_risk_(s=samp, a=act)
-            nuisance_inits = list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor
+            nuisance_inits = self._sample_coefs_ + self._action_coefs_ + starting_censor
             starting_vals = init_risk + nuisance_inits
             estr = self._fit_mestimator_(psi, init=starting_vals, subset=list(range(n_unique_times)))
             est = estr.theta
@@ -131,7 +136,7 @@ class BridgeIPW(BridgeTimeEstimator):
         if self.risks is not None:
             starting_vals = (list(self.risks['R-A1S1'] - self.risks['R-A1S0'])
                              + list(self.risks['R-A1S1'])[1:] + list(self.risks['R-A1S0'])[1:]
-                             + list(self._sample_coefs_) + list(self._action_coefs_) + starting_censor)
+                             + self._sample_coefs_ + self._action_coefs_ + starting_censor)
             subset_solve = list(range(n_unique_times*3 + 1))
             # TODO can I modify this to reduce what we are searching over?
         else:

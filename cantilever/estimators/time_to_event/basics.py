@@ -143,7 +143,7 @@ class BridgeTimeEstimator:
             return ef_action_logit(theta=theta, s=s, a=a,
                                    action_matrix=dm)
 
-        # Solving the estiamting equations
+        # Solving the estimating equations
         init = self._generate_inits_(init=init, n_params=2*n_params)
         estr = self._fit_mestimator_(estimating_functions=psi, init=init)
 
