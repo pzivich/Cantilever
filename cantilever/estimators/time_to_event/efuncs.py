@@ -356,7 +356,7 @@ def ef_pooled_logit(theta, delta, baseline_matrix, time_matrix, final_time_matri
     return score_plogit * contribute
 
 
-def ef_risk_gcomp(theta, delta, baseline_matrix, time_matrix, final_time_matrix, risk_set_matrix, contribute,
+def ef_risk_gcomp(theta, sample, delta, baseline_matrix, time_matrix, final_time_matrix, risk_set_matrix, contribute,
                   strata_unique_times, all_unique_times):
     n_unique_times = len(all_unique_times)
     alpha = theta[:n_unique_times]
@@ -375,7 +375,7 @@ def ef_risk_gcomp(theta, delta, baseline_matrix, time_matrix, final_time_matrix,
                                time_matrix=time_matrix,
                                strata_unique_times=strata_unique_times,
                                all_unique_times=all_unique_times)
-    ee_risks = risks - np.asarray(alpha)[:, None]
+    ee_risks = (risks - np.asarray(alpha)[:, None]) * sample
     # Returning stacked estimating equations
     return np.vstack([ee_risks, ee_plogit])
 
@@ -417,11 +417,13 @@ def ef_diagnostic_gcomp(theta, delta, baseline_matrix, sample,
                                time_matrix=time_matrix_s0,
                                strata_unique_times=strata_s0_times,
                                all_unique_times=all_unique_times)
-    ee_diag = sample*(risk1 - risk0) - np.asarray(alpha)[:, None]
+    ee_diag = sample*(risk1 - risk0 - np.asarray(alpha)[:, None])
+
     # Integrated risk difference
-    unique_times = np.asarray(all_unique_times)
-    time_scale = np.append(unique_times[1:], unique_times[-1]) - unique_times
+    unique_times = np.append([0., ], all_unique_times)
+    time_scale = unique_times[1:] - unique_times[:-1]
     ee_ird = (ird - np.sum(alpha * time_scale)) * np.ones(obs_n)
+
     # Returning stacked estimating equations
     return np.vstack([ee_ird, ee_diag, ee_plogit1, ee_plogit0])
 
@@ -461,7 +463,7 @@ def ef_single_span_gcomp(theta, delta, baseline_matrix, sample,
                                time_matrix=time_matrix_s0,
                                strata_unique_times=strata_s0_times,
                                all_unique_times=all_unique_times)
-    ee_rd = sample*(risk1 - risk0) - np.asarray(alpha)[:, None]
+    ee_rd = sample*(risk1 - risk0 - np.asarray(alpha)[:, None])
     # Returning stacked estimating equations
     return np.vstack([ee_rd, ee_plogit1, ee_plogit0])
 
@@ -532,6 +534,6 @@ def ef_multi_span_gcomp(theta, delta, baseline_matrix, sample,
                                time_matrix=time_matrix_s0,
                                strata_unique_times=strata_s0_times,
                                all_unique_times=all_unique_times)
-    ee_rd = sample*((risk3 - risk2) + (risk1 - risk0)) - np.asarray(alpha)[:, None]
+    ee_rd = sample*((risk3 - risk2) + (risk1 - risk0) - np.asarray(alpha)[:, None])
     # Returning stacked estimating equations
     return np.vstack([ee_rd, ee_plogit3, ee_plogit2, ee_plogit1, ee_plogit0])

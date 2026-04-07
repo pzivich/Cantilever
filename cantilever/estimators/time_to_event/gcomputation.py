@@ -53,6 +53,7 @@ class BridgeGComputation(BridgeTimeEstimator):
 
             def psi(theta):
                 return ef_risk_gcomp(theta=theta,
+                                     sample=s,
                                      delta=delta,
                                      baseline_matrix=baseline_matrix,
                                      time_matrix=t_matrix,
