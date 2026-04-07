@@ -514,6 +514,10 @@ class BridgeTimeEstimator:
         if pr[0] <= -5:                   # Bounding the intercept so it's not too low
             pr[0] = -4.6                  # ... expit(-4.6) ~ 0.01
 
+        # Replacing infs and nans
+        pr = np.nan_to_num(pr, 0.)
+        pr[pr == np.inf] = 0
+
         # Returning list of pre-set starting values
         return [0., ]*n_covs + list(pr)
 
