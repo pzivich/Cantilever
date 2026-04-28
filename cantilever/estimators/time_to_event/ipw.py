@@ -10,8 +10,32 @@ from cantilever.estimators.time_to_event.efuncs import (ef_risk_ipw, ef_diagnost
 
 
 class BridgeIPW(BridgeTimeEstimator):
-    r"""IPW bridge algorithm
+    r"""Inverse Probability Weighting (IPW) estimator for bridged comparisons with time-to-event data. This IPW
+    estimator is based on three sets of inverse probability weights: inverse probability of treatment weights (IPTW),
+    inverse probability of censoring weights (IPCW), and inverse odds of sampling weights (IOSW). These weights account
+    for confounding (or improve precision in the case of randomized trials), informative right censoring, and selection
+    bias, respectively.
 
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Pandas DataFrame object consisting of all variables of interest
+    time : str
+        Column label for the time variable
+    delta : str
+        Column label for the event indicator variable
+    action : str
+        Column label for the exposure variable
+    sample : str
+        Column label for the sample or study indicator variable
+    censor : str, None, optional
+        Column label for the censoring indicator
+    alpha : float, optional
+        Alpha level to use for the confidence intervals
+    verbose : bool, optional
+        Whether to print intermediate results
+    decimals : int, optional
+        Number of decimal places to display in outputs
     """
     def __init__(self, data, time, delta, action, sample, censor=None, alpha=0.05,
                  verbose=True, decimals=2):
@@ -27,6 +51,12 @@ class BridgeIPW(BridgeTimeEstimator):
                       UserWarning)
 
     def estimate_risks(self):
+        r"""Estimate the study- and arm-specific risks using the IPW product-limit estimator.
+
+        Returns
+        -------
+        None
+        """
         if self._sample_nuisance_model_ is None:
             raise ValueError("The function sample_model() must be called prior to estimating the risks")
         if self._action_nuisance_model_ is None:
@@ -100,6 +130,13 @@ class BridgeIPW(BridgeTimeEstimator):
         self.risks = results.set_index("Time")
 
     def estimate_diagnostic(self):
+        r"""Estimate the diagnostic comparing the risks between the shared arms of the studies using the IPW
+        product-limit estimator.
+
+        Returns
+        -------
+        None
+        """
         t, delta, a, s, c = self._get_variable_arrays_()
         t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
         n_unique_times = len(u_times)
@@ -169,6 +206,13 @@ class BridgeIPW(BridgeTimeEstimator):
         self.diagnostic = results.set_index("Time")
 
     def estimate_single_span(self):
+        r"""Estimate the contrast between the risks of the differing arms across the studies using the single-span IPW
+        product-limit estimator.
+
+        Returns
+        -------
+        None
+        """
         t, delta, a, s, c = self._get_variable_arrays_()
         t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
         n_unique_times = len(u_times)
@@ -230,6 +274,13 @@ class BridgeIPW(BridgeTimeEstimator):
         self.single_span = results.set_index("Time")
 
     def estimate_multi_span(self):
+        r"""Estimate the contrast between the risks of the differing arms across the studies using the multi-span IPW
+        product-limit estimator.
+
+        Returns
+        -------
+        None
+        """
         t, delta, a, s, c = self._get_variable_arrays_()
         t_matrix, f_matrix, r_matrix, u_times = self._get_time_matrices_(t=t, action=None, sample=None)
         n_unique_times = len(u_times)

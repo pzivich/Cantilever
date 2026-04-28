@@ -10,8 +10,30 @@ from cantilever.estimators.time_to_event.efuncs import (ef_risk_gcomp, ef_diagno
 
 
 class BridgeGComputation(BridgeTimeEstimator):
-    r"""G-computation bridge algorithm
+    r"""G-computation estimator for bridged comparisons with time-to-event data. This g-computation estimator fits a
+    pooled logistic regression model for the event of interest. This nuisance model is used to simultaneously address
+    confounding (in the case of observational data), informative right censoring, and selection bias.
 
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Pandas DataFrame object consisting of all variables of interest
+    time : str
+        Column label for the time variable
+    delta : str
+        Column label for the event indicator variable
+    action : str
+        Column label for the exposure variable
+    sample : str
+        Column label for the sample or study indicator variable
+    censor : str, None, optional
+        Column label for the censoring indicator
+    alpha : float, optional
+        Alpha level to use for the confidence intervals
+    verbose : bool, optional
+        Whether to print intermediate results
+    decimals : int, optional
+        Number of decimal places to display in outputs
     """
     def __init__(self, data, time, delta, action, sample, censor=None, alpha=0.05, verbose=True, decimals=2):
         # initialize the preceding class (allows for more arguments in init than BaseEstimator)
@@ -34,6 +56,12 @@ class BridgeGComputation(BridgeTimeEstimator):
                       UserWarning)
 
     def estimate_risks(self):
+        r"""Estimate the study- and arm-specific risks using the g-computation estimator.
+
+        Returns
+        -------
+        None
+        """
         if self._outcome_nuisance_model_ is None:
             raise ValueError("The function outcome_model() must be called prior to estimating the risks")
 
@@ -87,6 +115,13 @@ class BridgeGComputation(BridgeTimeEstimator):
         self.risks = results.set_index("Time")
 
     def estimate_diagnostic(self):
+        r"""Estimate the diagnostic comparing the risks between the shared arms of the studies using the g-computation
+         estimator.
+
+        Returns
+        -------
+        None
+        """
         if self._outcome_nuisance_model_ is None:
             raise ValueError("The function outcome_model() must be called prior to estimating the diagnostic")
 
@@ -143,6 +178,13 @@ class BridgeGComputation(BridgeTimeEstimator):
         self.diagnostic = results.set_index("Time")
 
     def estimate_single_span(self):
+        r"""Estimate the contrast between the risks of the differing arms across the studies using the single-span
+        g-computation estimator.
+
+        Returns
+        -------
+        None
+        """
         if self._outcome_nuisance_model_ is None:
             raise ValueError("The function outcome_model() must be called prior to estimating the risk difference")
 
@@ -195,6 +237,13 @@ class BridgeGComputation(BridgeTimeEstimator):
         self.single_span = results.set_index("Time")
 
     def estimate_multi_span(self):
+        r"""Estimate the contrast between the risks of the differing arms across the studies using the multi-span
+        g-computation estimator.
+
+        Returns
+        -------
+        None
+        """
         if self._outcome_nuisance_model_ is None:
             raise ValueError("The function outcome_model() must be called prior to estimating the risk difference")
 
