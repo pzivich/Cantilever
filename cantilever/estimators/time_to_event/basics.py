@@ -18,7 +18,9 @@ from cantilever.estimators.utils import (fit_mestimator,
 
 
 class BridgeTimeEstimator:
-    """Parent or base class for the bridged comparisons mean recipes.
+    """Parent or base class for the bridged comparisons time-to-event recipes. This class object is not meant for use
+    by a user. Rather this is the backbone for the IPW, g-computation, and AIPW estimators. It unites their shared
+    functions and makes them easily accessible and streamlines documentation.
 
     Parameters
     ----------
@@ -133,6 +135,33 @@ class BridgeTimeEstimator:
         self.multi_span = None
 
     def action_model(self, model, init=None, bounds=(0, 1)):
+        r""""Specify and fit a logistic regression model for the probability of the baseline action. This model
+        estimates the study-specific propensity scores to construct unstabilized inverse probability of treatment
+        weights. Specifically, this model estimates
+
+        .. math::
+
+            \text{logit}(\Pr(A=a \mid W)) = \alpha W^T
+
+        where this model is separately fit by study.
+
+        Parameters
+        ----------
+         model : str
+            Model specification for the action using a Wilkinson-style formula. For example, ``var1 + var2 + var3``. As
+            ``formulaic`` is used, any of the functionalities in that package are available.
+        init : optional
+            Optional initial values for the root-finding procedure used to solve for the logistic regression model.
+            This argument can be used if there is difficulty in having the model converge.
+        bounds : float, list, optional
+            Value between 0,1 to truncate predicted probabilities. Specifying this argument can improve finite sample
+            performance with data sparsity at the cost of some additional bias. Default is ``(0, 1)``, which applies
+            no truncation.
+
+        Returns
+        -------
+        None
+        """
         self._action_nuisance_model_ = model
         t, delta, a, s, c = self._get_variable_arrays_()
         dm, labels = get_design_matrix(self._action_nuisance_model_, self.data)
@@ -168,6 +197,33 @@ class BridgeTimeEstimator:
         self._action_coefs_ = list(estr.theta)           # Action nuisance model coefficients
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
+        r"""Specify and fit a logistic regression model for the probability of the sample. This model estimates the
+        selection scores used to construct unstabilized inverse odds of sampling weights. Specifically, this model
+        estimates
+
+        .. math::
+
+            \text{logit}(\Pr(S=1 \mid W)) = \gamma W^T
+
+        where the model is fit using observations from both studies.
+
+        Parameters
+        ----------
+         model : str
+            Model specification for selection using a Wilkinson-style formula. For example, ``var1 + var2 + var3``. As
+            ``formulaic`` is used, any of the functionalities in that package are available.
+        init : optional
+            Optional initial values for the root-finding procedure used to solve for the logistic regression model.
+            This argument can be used if there is difficulty in having the model converge.
+        bounds : list, ndarray, optional
+            Value between 0,1 to truncate predicted probabilities. Specifying this argument can improve finite sample
+            performance with data sparsity at the cost of some additional bias. Default is ``(0, 1)``, which applies
+            no truncation.
+
+        Returns
+        -------
+        None
+        """
         # Setting up data for the estimating functions
         t, delta, a, s, c = self._get_variable_arrays_()
         dm, labels = get_design_matrix(formula=model, data=self.data)
@@ -199,7 +255,27 @@ class BridgeTimeEstimator:
         self._sample_coefs_labels_ = labels              # Sampling nuisance model coefficient labels
         self._sample_coefs_ = list(estr.theta)           # Sampling nuisance model coefficients
 
-    def censor_model(self, model, init=None, bounds=(0, 1)):
+    def censor_model(self, model, bounds=(0, 1)):
+        r"""Specify and fit a pooled logistic regression model for the probability of censoring. This model estimates
+        the censoring scores used to construct unstabilized inverse probability of censoring weights. Here, a pooled
+        logistic regression model with a disjoint indicator for time is fit. Pooled logistic regression models are
+        independently fit for both studies.
+
+        Parameters
+        ----------
+         model : str
+            Model specification for censoring using a Wilkinson-style formula. For example, ``var1 + var2 + var3``. As
+            ``formulaic`` is used, any of the functionalities in that package are available.
+        bounds : float, list, optional
+            Value between 0,1 to truncate predicted probabilities. Specifying this argument can improve finite sample
+            performance with data sparsity at the cost of some additional bias. Default is ``(0, 1)``, which applies
+            no truncation.
+
+        Returns
+        -------
+        None
+        """
+        # TODO add init argument back and corresponding logic
         # Setting up data for the estimating functions
         model = model + " - 1"
         t, delta, a, s, c = self._get_variable_arrays_()
@@ -251,6 +327,21 @@ class BridgeTimeEstimator:
         self._censor_coefs_labels_ = labels       # Censor nuisance model coefficient labels
 
     def outcome_model(self, model):
+        r"""Specify and fit a pooled logistic regression model for the probability of the event. This model estimates
+        the discrete-time hazard, or the probability of the event in an interval given survival up to that interval.
+        Pooled logistic regression models are fit separately for each study and arm.
+
+        Parameters
+        ----------
+         model : str
+            Model specification for censoring using a Wilkinson-style formula. For example, ``var1 + var2 + var3``. As
+            ``formulaic`` is used, any of the functionalities in that package are available.
+
+        Returns
+        -------
+        None
+        """
+        # TODO add init argument back and corresponding logic
         # Setting up data for the estimating functions
         model = model + " - 1"
         t, delta, a, s, c = self._get_variable_arrays_()
@@ -316,12 +407,40 @@ class BridgeTimeEstimator:
         pass
 
     def estimate_contrasts(self):
+        r"""Estimate the corresponding contrasts between arms. This function computes the diagnostic, single-span, and
+        multi-span parameters. This function is equivalent to calling ``estimate_diagnostic()``,
+        ``estimate_single_span()``, and ``estimate_multi_span()``.
+
+        Returns
+        -------
+        None
+        """
         self.estimate_diagnostic()
         self.estimate_single_span()
         self.estimate_multi_span()
 
     def plot_risks(self, ax=None, colors=('c', 'm', 'y', 'k'), linestyle=('-', '-', '-', '-'),
                    labels=('A2S1', 'A1S1', 'A1S0', 'A0S0'), include_ci=False):
+        r"""Plot the study- and arm-specific risk functions on a shared plot.
+
+        Parameters
+        ----------
+        ax : None, axes
+            Optional matplotlib axes object. This argument allows the user to format the size and shape of the plot.
+        colors : list, ndarray, optional
+            A container of 4 colors to use for the risk functions.
+        linestyle : list, ndarray, optional
+            A container of 4 line styles to use for the risk functions.
+        labels : list, ndarray, optional
+            A container of 4 labels to use for the risk functions.
+        include_ci : bool, optional
+            Argument for whether to plot the corresponding 95% confidence intervals for the risk functions. Default is
+            ``False``.
+
+        Returns
+        -------
+        matplotlib axes object
+        """
         if ax is None:                   # If not axes are provided
             ax = plt.gca()               # ... then generate a new axes to plot with
 
@@ -359,6 +478,27 @@ class BridgeTimeEstimator:
         return ax
 
     def plot_diagnostic(self, ax=None, color='k', favors=True, favors_label=("S=1", "S=0"), favors_spacing="\t"):
+        r"""Draw the twister plot for the comparison between the shared arms across studies. This serves as a visual
+        diagnostic for the corresponding assumptions to compare across studies.
+
+        Parameters
+        ----------
+        ax : None, axes
+            Optional matplotlib axes object. This argument allows the user to format the size and shape of the plot.
+        color : str, optional
+            Color to use for the risk difference function.
+        favors : bool, optional
+            Whether to plot a secondary axis with the favoring label between the arms.
+        favors_label : list, ndarray, optional
+            Label to display on the secondary axis for each side. This argument is only used when ``favors=True``
+        favors_spacing : str, optional
+            String to manually adjust the spacing between the favor labels. This argument is only used when
+            ``favors=True``
+
+        Returns
+        -------
+        matplotlib axes object
+        """
         # Estimating risks and their CI's1
         if self.diagnostic is None:
             self.estimate_diagnostic()
@@ -379,6 +519,27 @@ class BridgeTimeEstimator:
         return ax
 
     def plot_single_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t"):
+        r"""Draw the twister plot for the single-span comparison between the differing arms across studies. This serves
+        as a visual summary of the main results.
+
+        Parameters
+        ----------
+        ax : None, axes
+            Optional matplotlib axes object. This argument allows the user to format the size and shape of the plot.
+        color : str, optional
+            Color to use for the risk difference function.
+        favors : bool, optional
+            Whether to plot a secondary axis with the favoring label between the arms.
+        favors_label : list, ndarray, optional
+            Label to display on the secondary axis for each side. This argument is only used when ``favors=True``
+        favors_spacing : str, optional
+            String to manually adjust the spacing between the favor labels. This argument is only used when
+            ``favors=True``
+
+        Returns
+        -------
+        matplotlib axes object
+        """
         # Estimating risks and their CI's
         if self.single_span is None:
             self.estimate_single_span()
@@ -399,6 +560,27 @@ class BridgeTimeEstimator:
         return ax
 
     def plot_multi_span(self, ax=None, color='k', favors=True, favors_label=("A=2", "A=0"), favors_spacing="\t"):
+        r"""Draw the twister plot for the multi-span comparison between the differing arms across studies. This serves
+        as a visual summary of the main results.
+
+        Parameters
+        ----------
+        ax : None, axes
+            Optional matplotlib axes object. This argument allows the user to format the size and shape of the plot.
+        color : str, optional
+            Color to use for the risk difference function.
+        favors : bool, optional
+            Whether to plot a secondary axis with the favoring label between the arms.
+        favors_label : list, ndarray, optional
+            Label to display on the secondary axis for each side. This argument is only used when ``favors=True``
+        favors_spacing : str, optional
+            String to manually adjust the spacing between the favor labels. This argument is only used when
+            ``favors=True``
+
+        Returns
+        -------
+        matplotlib axes object
+        """
         # Estimating risks and their CI's
         if self.multi_span is None:
             self.estimate_multi_span()
