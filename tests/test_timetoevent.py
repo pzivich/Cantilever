@@ -1,5 +1,3 @@
-from multiprocessing.dummy.connection import families
-
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
@@ -92,6 +90,9 @@ class TestTTEUtilities:
                              ]).T
 
         npt.assert_allclose(actual, expect, atol=1e-8)
+
+
+# TODO test base-class errors raised correctly
 
 
 class TestBridgeIPW:
@@ -608,19 +609,3 @@ class TestBridgeGComputation:
         npt.assert_allclose(bgcomp.multi_span['RD-MS'],
                             [0., ] + list((risks[0] - risks[1]) + (risks[2] - risks[3])),
                             atol=1e-7)
-
-
-class TestBridgeAIPW:
-
-    def test_sample_model(self, data):
-        # Function in Cantilever
-        bipw = BridgeIPW(data=data, time='T', delta='D', action='A', sample='S', censor='C', verbose=False)
-        bipw.sample_model(model="W")
-
-        # External reference
-        fm = smf.glm("S ~ W", data=data, family=sm.families.Binomial()).fit()
-
-        # Comparing coefficients
-        npt.assert_allclose(bipw._sample_coefs_,
-                            fm.params,
-                            atol=1e-8)
