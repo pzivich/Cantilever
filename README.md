@@ -25,7 +25,7 @@ Dependencies: `numpy`, `scipy`, `pandas`, `delicatessen`, `matplotlib`, `formula
 
 ## Getting Started
 
-See `docs/Example/` for illustrative applications with publicly-available data
+See `docs/Example/` for illustrative applications with publicly-available data.
 
 
 ## Acknowledgements
