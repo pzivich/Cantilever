@@ -127,7 +127,7 @@ class BridgePointEstimator:
         self.tmle_results = None           # Storage for completed TMLE process
 
     def action_model(self, model, init=None, bounds=(0, 1)):
-        """Estimate the action nuisance model. This function takes the specified nuisance model for the action (e.g.,
+        r"""Estimate the action nuisance model. This function takes the specified nuisance model for the action (e.g.,
         exposure, treatment, intervention) and estimates the corresponding parameters using a logistic regression model.
         This model is used to compute the propensity scores and inverse probability of treatment weights.
 
@@ -184,7 +184,7 @@ class BridgePointEstimator:
         self._action_coefs_ = estr.theta                 # Action nuisance model coefficients
 
     def sample_model(self, model, init=None, bounds=(0, 1)):
-        """Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
+        r"""Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
         estimates the corresponding parameters using a logistic regression model. This model is used to compute the
         sample scores and inverse odds of sampling weights.
 
@@ -234,7 +234,7 @@ class BridgePointEstimator:
         self._sample_coefs_ = estr.theta                 # Sampling nuisance model coefficients
 
     def missing_model(self, model, init=None, bounds=(0, 1)):
-        """Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
+        r"""Estimate the sample nuisance model. This function takes the specified nuisance model for sampling and
         estimates the corresponding parameters using a logistic regression model. This model is used to compute the
         sample scores and inverse odds of sampling weights.
 
@@ -287,7 +287,7 @@ class BridgePointEstimator:
                           "is being skipped.")
 
     def outcome_model(self, model, model_type='linear', init=None):
-        """Outcome models with the same specifications are fit to either piece
+        r"""Outcome models with the same specifications are fit to either piece
 
         The outcome model is defined as :math:`E(Y|A,W,S,R=1)`. Here, the outcome nuisance model is independently
         fit for each study sample.
